@@ -7,12 +7,14 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"dnso/internal/repository"
 	"dnso/internal/server"
+	"dnso/internal/web"
 
 	"github.com/miekg/dns"
 	"github.com/spf13/cobra"
@@ -23,7 +25,7 @@ import (
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
 	Use:   "serve",
-	Short: "Start DNS server",
+	Short: "Start DNS server and web interface",
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := runServer(); err != nil {
 			log.Fatalf("server error: %v", err)
@@ -43,10 +45,11 @@ func envOrDefault(key, defaultVal string) string {
 }
 
 func runServer() error {
-	dbPath := envOrDefault("DNSO_ DB_PATH", "./dnso.db")
+	dbPath := envOrDefault("DNSO_DB_PATH", "./dnso.db")
 	bindAddr := envOrDefault("DNSO_BIND_ADDR", ":5354")
 	upstream := envOrDefault("DNSO_UPSTREAM", "8.8.8.8:53")
 	enableCache := envOrDefault("DNSO_CACHE", "true") == "true"
+	webAddr := envOrDefault("DNSO_WEB_ADDR", ":8080")
 
 	// Открываем БД
 	db, err := sql.Open("sqlite3", dbPath)
@@ -90,14 +93,30 @@ func runServer() error {
 		Net:  "udp",
 	}
 
+	// Создаём веб-сервер
+	webServer := web.NewServer(db)
+	httpServer := &http.Server{
+		Addr:    webAddr,
+		Handler: webServer,
+	}
+
 	// Канал для graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
+	// Запускаем DNS-сервер
 	go func() {
 		log.Printf("DNS server listening on %s (upstream: %s)", bindAddr, upstream)
 		if err := srv.ListenAndServe(); err != nil {
-			log.Fatalf("Failed to start server: %v", err)
+			log.Fatalf("Failed to start DNS server: %v", err)
+		}
+	}()
+
+	// Запускаем веб-сервер
+	go func() {
+		log.Printf("Web interface listening on %s", webAddr)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start web server: %v", err)
 		}
 	}()
 
@@ -107,7 +126,10 @@ func runServer() error {
 
 	// Graceful shutdown
 	if err := srv.Shutdown(); err != nil {
-		return fmt.Errorf("server shutdown error: %w", err)
+		return fmt.Errorf("DNS server shutdown error: %w", err)
+	}
+	if err := httpServer.Close(); err != nil {
+		return fmt.Errorf("web server shutdown error: %w", err)
 	}
 
 	log.Println("Server stopped gracefully")

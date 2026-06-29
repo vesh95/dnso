@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNSO — управление зонами</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>DNSO</h1>
+        <nav>
+            <a href="/" class="active">Зоны</a>
+        </nav>
+    </header>
+
+    <main>
+        <section id="zones-section">
+            <div class="section-header">
+                <h2>Зоны</h2>
+                <button class="btn btn-primary" onclick="showAddZoneModal()">+ Добавить зону</button>
+            </div>
+            <table id="zones-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Имя зоны</th>
+                        <th>TTL</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="zones-tbody">
+                    <tr><td colspan="4" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="records-section" class="hidden">
+            <div class="section-header">
+                <h2><a href="#" id="records-back" onclick="showZones()">← Зоны</a> / <span id="records-zone-name"></span></h2>
+                <button class="btn btn-primary" onclick="showAddRecordModal()">+ Добавить запись</button>
+            </div>
+            <table id="records-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Домен</th>
+                        <th>Тип</th>
+                        <th>Значение</th>
+                        <th>TTL</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="records-tbody">
+                    <tr><td colspan="6" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <!-- Zone Modal -->
+    <div id="zone-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('zone-modal')">&times;</span>
+            <h3 id="zone-modal-title">Добавить зону</h3>
+            <form id="zone-form" onsubmit="saveZone(event)">
+                <input type="hidden" id="zone-edit-name">
+                <label>
+                    Имя зоны:
+                    <input type="text" id="zone-name" placeholder="example.com." required>
+                </label>
+                <label>
+                    TTL:
+                    <input type="number" id="zone-ttl" value="300" min="1">
+                </label>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Record Modal -->
+    <div id="record-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('record-modal')">&times;</span>
+            <h3 id="record-modal-title">Добавить запись</h3>
+            <form id="record-form" onsubmit="saveRecord(event)">
+                <input type="hidden" id="record-edit-id">
+                <label>
+                    Домен:
+                    <input type="text" id="record-domain" placeholder="www.example.com." required>
+                </label>
+                <label>
+                    Тип:
+                    <select id="record-type" required>
+                        <option value="A">A</option>
+                        <option value="AAAA">AAAA</option>
+                        <option value="CNAME">CNAME</option>
+                        <option value="MX">MX</option>
+                        <option value="TXT">TXT</option>
+                        <option value="NS">NS</option>
+                        <option value="SOA">SOA</option>
+                    </select>
+                </label>
+                <label>
+                    Значение (Rdata):
+                    <input type="text" id="record-rdata" placeholder="192.168.1.1" required>
+                </label>
+                <label>
+                    TTL:
+                    <input type="number" id="record-ttl" value="300" min="1">
+                </label>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="modal hidden">
+        <div class="modal-content modal-sm">
+            <h3>Подтверждение</h3>
+            <p id="confirm-text">Вы уверены?</p>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('confirm-modal')">Отмена</button>
+                <button class="btn btn-danger" id="confirm-btn" onclick="confirmAction()">Удалить</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -2,7 +2,6 @@ name: CD
 
 on:
   push:
-    branches: [main, master]
     tags: ["v*"]
 
 env:
@@ -10,8 +9,24 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  wait-ci:
+    name: Wait for CI
+    runs-on: ubuntu-latest
+    outputs:
+      conclusion: ${{ steps.wait.outputs.conclusion }}
+    steps:
+      - name: Wait for CI workflow
+        id: wait
+        uses: fountainhead/action-wait-for-check@v1.2.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Lint
+          ref: ${{ github.sha }}
+
   docker:
     name: Build and Push Docker Image
+    needs: [wait-ci]
+    if: needs.wait-ci.outputs.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -40,12 +55,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=,suffix=,format=short
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6

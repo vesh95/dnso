@@ -1,8 +1,10 @@
 # Игнорируем всё, что не нужно для сборки
 .git
 .gitignore
+.github/
 *.md
 docs/
 *.db
 .env
 LICENSE
+docker-compose.yml

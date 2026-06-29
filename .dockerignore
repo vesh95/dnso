@@ -1,0 +1,8 @@
+# Игнорируем всё, что не нужно для сборки
+.git
+.gitignore
+*.md
+docs/
+*.db
+.env
+LICENSE

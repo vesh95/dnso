@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  dnso:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dnso
+    restart: unless-stopped
+    ports:
+      - "53:53/udp"
+      - "9000:9000/tcp"
+    environment:
+      DNSO_DB_PATH: /data/dnso.db
+      DNSO_BIND_ADDR: :53
+      DNSO_UPSTREAM: 8.8.8.8:53
+      DNSO_CACHE: "true"
+      DNSO_WEB_ADDR: :9000
+    volumes:
+      - dnso-data:/data
+
+volumes:
+  dnso-data:

@@ -2,6 +2,8 @@ package repository
 
 import (
 	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -22,7 +24,11 @@ func upDatabase(t *testing.T) *sql.DB {
 	driver, err := sqlite.WithInstance(conn, &sqlite.Config{})
 	require.NoError(t, err)
 
-	m, err := migrate.NewWithDatabaseInstance("file://../../migrations", "sqlite3", driver)
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+
+	migrationsPath := filepath.Join(wd, "..", "..", "migrations")
+	m, err := migrate.NewWithDatabaseInstance("file://"+migrationsPath, "sqlite3", driver)
 	require.NoError(t, err)
 
 	err = m.Up()

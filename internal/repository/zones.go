@@ -15,6 +15,7 @@ type Zone struct {
 type ZoneRepository interface {
 	Get(ctx context.Context, name string) (*Zone, error)
 	GetId(ctx context.Context, id uint64) (*Zone, error)
+	GetAll(ctx context.Context) ([]*Zone, error)
 	Add(ctx context.Context, name string, ttl int64) (*Zone, error)
 	Update(ctx context.Context, name string, ttl int64) (*Zone, error)
 	Delete(ctx context.Context, name string) (bool, error)
@@ -29,11 +30,7 @@ func NewZoneStorage(db *sql.DB) *ZoneStorage {
 }
 
 func (s *ZoneStorage) Get(ctx context.Context, name string) (*Zone, error) {
-	row := s.db.QueryRowContext(ctx, "SELECT id, name, ttl FROM zones WHERE name = $1 LIMIT 1", name)
-
-	if err := row.Err(); err != nil {
-		return nil, err
-	}
+	row := s.db.QueryRowContext(ctx, "SELECT id, name, ttl FROM zones WHERE name = $1", name)
 
 	z := &Zone{}
 	err := row.Scan(&z.Id, &z.Name, &z.TTL)
@@ -44,11 +41,30 @@ func (s *ZoneStorage) Get(ctx context.Context, name string) (*Zone, error) {
 	return z, nil
 }
 
-func (s *ZoneStorage) GetId(ctx context.Context, id uint64) (*Zone, error) {
-	row := s.db.QueryRowContext(ctx, "SELECT id, name, ttl FROM zones WHERE id = $1 LIMIT 1", id)
-	if err := row.Err(); err != nil {
+func (s *ZoneStorage) GetAll(ctx context.Context) ([]*Zone, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT id, name, ttl FROM zones")
+	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
+
+	var zones []*Zone
+	for rows.Next() {
+		z := &Zone{}
+		if err := rows.Scan(&z.Id, &z.Name, &z.TTL); err != nil {
+			return nil, err
+		}
+		zones = append(zones, z)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return zones, nil
+}
+
+func (s *ZoneStorage) GetId(ctx context.Context, id uint64) (*Zone, error) {
+	row := s.db.QueryRowContext(ctx, "SELECT id, name, ttl FROM zones WHERE id = $1", id)
 
 	z := &Zone{}
 	err := row.Scan(&z.Id, &z.Name, &z.TTL)
@@ -66,8 +82,11 @@ func (s *ZoneStorage) Add(ctx context.Context, name string, ttl int64) (*Zone, e
 	}
 
 	id, err := res.LastInsertId()
-	if err != nil || id == 0 {
+	if err != nil {
 		return nil, err
+	}
+	if id == 0 {
+		return nil, fmt.Errorf("last insert id is 0")
 	}
 
 	return s.Get(ctx, name)

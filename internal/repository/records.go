@@ -16,7 +16,7 @@ type Record struct {
 }
 
 type RecordRepository interface {
-	Get(ctx context.Context, domain string) ([]*Record, error)
+	Get(ctx context.Context, domain, rtype string) ([]*Record, error)
 	GetId(ctx context.Context, id uint64) (*Record, error)
 	Add(ctx context.Context, ZoneId uint64, domain, rtype, rdata string, ttl int64) (*Record, error)
 	Update(ctx context.Context, id uint64, zoneId uint64, domain, rtype, rdata string, ttl int64) (*Record, error)
@@ -35,33 +35,30 @@ func (s *RecordStorage) Get(ctx context.Context, domain, rtype string) (records 
 	records = make([]*Record, 0)
 	rows, err := s.db.QueryContext(ctx, "SELECT id, zone_id, domain, type, rdata, ttl FROM records WHERE domain = $1 and type = $2", domain, rtype)
 	if err != nil {
-		return
+		return nil, err
 	}
 	defer rows.Close()
-
-	if err = rows.Err(); err != nil {
-		return
-	}
 
 	for rows.Next() {
 		r := &Record{}
 
 		err = rows.Scan(&r.Id, &r.ZoneId, &r.Domain, &r.Type, &r.Rdata, &r.TTL)
 		if err != nil {
-			return
+			return nil, err
 		}
 
 		records = append(records, r)
 	}
 
-	return records, err
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return records, nil
 }
 
 func (s *RecordStorage) GetId(ctx context.Context, id uint64) (*Record, error) {
-	row := s.db.QueryRowContext(ctx, "SELECT id, zone_id, domain, type, rdata, ttl FROM records WHERE id = $1 LIMIT 1", id)
-	if err := row.Err(); err != nil {
-		return nil, err
-	}
+	row := s.db.QueryRowContext(ctx, "SELECT id, zone_id, domain, type, rdata, ttl FROM records WHERE id = $1", id)
 
 	r := &Record{}
 	err := row.Scan(&r.Id, &r.ZoneId, &r.Domain, &r.Type, &r.Rdata, &r.TTL)
@@ -83,6 +80,9 @@ func (s *RecordStorage) Add(ctx context.Context, ZoneId uint64, domain, rtype, r
 	id, err := res.LastInsertId()
 	if err != nil {
 		return nil, err
+	}
+	if id == 0 {
+		return nil, fmt.Errorf("last insert id is 0")
 	}
 
 	return s.GetId(ctx, uint64(id))

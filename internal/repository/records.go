@@ -18,6 +18,7 @@ type Record struct {
 type RecordRepository interface {
 	Get(ctx context.Context, domain, rtype string) ([]*Record, error)
 	GetId(ctx context.Context, id uint64) (*Record, error)
+	GetAllByZoneID(ctx context.Context, zoneID uint64) ([]*Record, error)
 	Add(ctx context.Context, ZoneId uint64, domain, rtype, rdata string, ttl int64) (*Record, error)
 	Update(ctx context.Context, id uint64, zoneId uint64, domain, rtype, rdata string, ttl int64) (*Record, error)
 	Delete(ctx context.Context, id uint64) (bool, error)
@@ -67,6 +68,28 @@ func (s *RecordStorage) GetId(ctx context.Context, id uint64) (*Record, error) {
 	}
 
 	return r, nil
+}
+
+func (s *RecordStorage) GetAllByZoneID(ctx context.Context, zoneID uint64) ([]*Record, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT id, zone_id, domain, type, rdata, ttl FROM records WHERE zone_id = $1", zoneID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []*Record
+	for rows.Next() {
+		r := &Record{}
+		if err := rows.Scan(&r.Id, &r.ZoneId, &r.Domain, &r.Type, &r.Rdata, &r.TTL); err != nil {
+			return nil, err
+		}
+		records = append(records, r)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return records, nil
 }
 
 func (s *RecordStorage) Add(ctx context.Context, ZoneId uint64, domain, rtype, rdata string, ttl int64) (*Record, error) {

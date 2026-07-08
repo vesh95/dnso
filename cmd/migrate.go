@@ -4,6 +4,7 @@ Copyright © 2026 Eduard Larionov <vesh95.17@ya.ru>
 package cmd
 
 import (
+	"embed"
 	"fmt"
 	"log"
 	"os"
@@ -11,8 +12,11 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/spf13/cobra"
 )
+
+var MigrationsFS embed.FS
 
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
@@ -52,16 +56,15 @@ func dbPath() string {
 	return "./dnso.db"
 }
 
-func migrationsPath() string {
-	if val := os.Getenv("DNSO_MIGRATIONS_PATH"); val != "" {
-		return val
-	}
-	return "file://migrations"
-}
-
 func newMigrate() (*migrate.Migrate, error) {
 	dbURL := fmt.Sprintf("sqlite3://%s", dbPath())
-	m, err := migrate.New(migrationsPath(), dbURL)
+
+	src, err := iofs.New(MigrationsFS, "migrations")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load migrations: %w", err)
+	}
+
+	m, err := migrate.NewWithSourceInstance("iofs", src, dbURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create migrate instance: %w", err)
 	}

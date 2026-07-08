@@ -222,7 +222,10 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		if err != nil || resp == nil {
 			h.logger.Error("failed to forward to upstream", "id", r.Id, "error", err.Error())
 			m.SetRcode(r, dns.RcodeServerFailure)
-			w.WriteMsg(m)
+			err = w.WriteMsg(m)
+			if err != nil {
+				h.logger.Error("failed to write response", "id", r.Id, "error", err.Error())
+			}
 			return
 		}
 
@@ -278,5 +281,8 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		}
 	}
 
-	w.WriteMsg(m)
+	err := w.WriteMsg(m)
+	if err != nil {
+		h.logger.Error("failed to write response", "id", r.Id, "error", err.Error())
+	}
 }

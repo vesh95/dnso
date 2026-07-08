@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -47,7 +49,7 @@ func upDatabase(t *testing.T) *sql.DB {
 
 func setupTest(t *testing.T) (*Server, *sql.DB) {
 	db := upDatabase(t)
-	s := NewServer(db)
+	s := NewServer(db, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	return s, db
 }
 

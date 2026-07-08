@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,13 +26,15 @@ type Server struct {
 	recordStorage *repository.RecordStorage
 	mux           *http.ServeMux
 	tmpl          *template.Template
+	logger        *slog.Logger
 }
 
-func NewServer(db *sql.DB) *Server {
+func NewServer(db *sql.DB, logger *slog.Logger) *Server {
 	s := &Server{
 		zoneStorage:   repository.NewZoneStorage(db),
 		recordStorage: repository.NewRecordStorage(db),
 		mux:           http.NewServeMux(),
+		logger:        logger,
 	}
 
 	// Парсим шаблоны из embed.FS
@@ -69,7 +72,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(w, "index.html", nil)
+	err := s.tmpl.ExecuteTemplate(w, "index.html", nil)
+	if err != nil {
+		s.logger.Error("failed to render template", "error", err.Error())
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }
 
 // --- Zones ---

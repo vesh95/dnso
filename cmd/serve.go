@@ -122,7 +122,7 @@ func runServer() error {
 	}
 
 	// Создаём веб-сервер
-	webServer := web.NewServer(db)
+	webServer := web.NewServer(db, logger.With("handler_type", "web"))
 	httpServer := &http.Server{
 		Addr:    webAddr,
 		Handler: webServer,

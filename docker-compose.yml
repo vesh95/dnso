@@ -9,13 +9,13 @@ services:
     restart: unless-stopped
     ports:
       - "53:53/udp"
-      - "9000:9000/tcp"
+      - "9000:8080/tcp"
     environment:
       DNSO_DB_PATH: /data/dnso.db
       DNSO_BIND_ADDR: :53
       DNSO_UPSTREAM: 8.8.8.8:53
       DNSO_CACHE: "true"
-      DNSO_WEB_ADDR: :9000
+      DNSO_WEB_ADDR: :8080
     volumes:
       - dnso-data:/data
 

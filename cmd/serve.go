@@ -46,7 +46,7 @@ func envOrDefault(key, defaultVal string) string {
 
 func runServer() error {
 	dbPath := envOrDefault("DNSO_DB_PATH", "./dnso.db")
-	bindAddr := envOrDefault("DNSO_BIND_ADDR", ":5354")
+	bindAddr := envOrDefault("DNSO_BIND_ADDR", ":53")
 	upstream := envOrDefault("DNSO_UPSTREAM", "8.8.8.8:53")
 	enableCache := envOrDefault("DNSO_CACHE", "true") == "true"
 	webAddr := envOrDefault("DNSO_WEB_ADDR", ":8080")

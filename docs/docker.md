@@ -24,7 +24,7 @@ docker run -d \
 | `DNSO_BIND_ADDR` | `:53`         | Адрес для DNS-сервера           |
 | `DNSO_UPSTREAM`  | `8.8.8.8:53`  | Upstream DNS-резолвер           |
 | `DNSO_CACHE`     | `true`        | Включение кэширования (`true`/`false`) |
-| `DNSO_WEB_ADDR`  | `:9000`       | Адрес для веб-интерфейса        |
+| `DNSO_WEB_ADDR`  | `:8080`       | Адрес для веб-интерфейса        |
 
 ### Порты
 

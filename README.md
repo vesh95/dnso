@@ -1,4 +1,5 @@
 # DNSO
+[![CI](https://github.com/vesh95/dnso/actions/workflows/ci.yml/badge.svg)](https://github.com/vesh95/dnso/actions/workflows/ci.yml)
 
 **DNSO** — это локальный DNS-сервер с веб-интерфейсом для управления DNS-зонами и записями. Позволяет создавать собственные DNS-зоны, добавлять записи типов A, AAAA, CNAME, MX, TXT, NS, SOA и проксировать остальные запросы к вышестоящему DNS-серверу.
 

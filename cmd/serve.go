@@ -51,6 +51,12 @@ func runServer() error {
 	enableCache := envOrDefault("DNSO_CACHE", "true") == "true"
 	webAddr := envOrDefault("DNSO_WEB_ADDR", ":8080")
 
+	fmt.Println("Apply migrations")
+	err := runMigrateUp()
+	if err != nil {
+		return fmt.Errorf("Failed to apply migrations: %w", err)
+	}
+
 	// Открываем БД
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {

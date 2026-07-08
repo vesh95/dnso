@@ -63,7 +63,6 @@ dig @127.0.0.1 -p 53 google.com
 | `DNSO_UPSTREAM`           | `8.8.8.8:53`    | Вышестоящий DNS-сервер           |
 | `DNSO_CACHE`              | `true`          | Включение кэширования            |
 | `DNSO_WEB_ADDR`           | `:8080`         | Адрес веб-интерфейса             |
-| `DNSO_MIGRATIONS_PATH`    | `file://migrations` | Путь к миграциям              |
 
 ---
 

@@ -37,7 +37,7 @@ COPY --from=builder /dnso /dnso
 
 # Порт DNS (UDP) и веб-интерфейса (TCP)
 EXPOSE 53/udp
-EXPOSE 9000/tcp
+EXPOSE 8080/tcp
 
 # Точка входа
 ENTRYPOINT ["/dnso"]

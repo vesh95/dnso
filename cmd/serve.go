@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +16,8 @@ import (
 	"dnso/internal/repository"
 	"dnso/internal/server"
 	"dnso/internal/web"
+
+	"strings"
 
 	"github.com/miekg/dns"
 	"github.com/spf13/cobra"
@@ -44,12 +47,30 @@ func envOrDefault(key, defaultVal string) string {
 	return defaultVal
 }
 
+func logLevelFromString(level string) slog.Level {
+	switch strings.ToLower(level) {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
 func runServer() error {
 	dbPath := envOrDefault("DNSO_DB_PATH", "./dnso.db")
 	bindAddr := envOrDefault("DNSO_BIND_ADDR", ":53")
 	upstream := envOrDefault("DNSO_UPSTREAM", "8.8.8.8:53")
 	enableCache := envOrDefault("DNSO_CACHE", "true") == "true"
 	webAddr := envOrDefault("DNSO_WEB_ADDR", ":8080")
+	logLevel := logLevelFromString(envOrDefault("LOG_LEVEL", "info"))
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 
 	fmt.Println("Apply migrations")
 	err := runMigrateUp()
@@ -88,6 +109,7 @@ func runServer() error {
 		ZoneStorage:   zoneStorage,
 		RecordStorage: recordStorage,
 		Cache:         cache,
+		Logger:        logger.With("handler_type", "dns"),
 	})
 
 	// Регистрируем хендлер для всех доменов

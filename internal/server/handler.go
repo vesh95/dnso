@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -17,6 +18,7 @@ type HandlerConfig struct {
 	ZoneStorage   repository.ZoneRepository
 	RecordStorage repository.RecordRepository
 	Cache         *DNSCache
+	Logger        *slog.Logger
 }
 
 type Handler struct {
@@ -25,6 +27,7 @@ type Handler struct {
 	zoneStorage   repository.ZoneRepository
 	recordStorage repository.RecordRepository
 	cache         *DNSCache
+	logger        *slog.Logger
 
 	mu         sync.RWMutex
 	localZones map[string]struct{} // set of known local zone names (FQDN)
@@ -38,6 +41,7 @@ func NewHandler(config *HandlerConfig) *Handler {
 		recordStorage: config.RecordStorage,
 		cache:         config.Cache,
 		localZones:    make(map[string]struct{}),
+		logger:        config.Logger,
 	}
 	h.refreshZones()
 	return h
@@ -157,12 +161,17 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	var proxyQuestions []dns.Question
 	var anyLocal bool
 
+	h.logger.Info("processing DNS request", "question_count", len(r.Question), "id", r.Id, "remote_addr", w.RemoteAddr().String())
+
 	for _, q := range r.Question {
 		name := dns.Fqdn(q.Name)
+		h.logger.Debug("processing question", "name", name, "type", dns.TypeToString[q.Qtype], "id", r.Id)
 
 		// 1. Проверяем кэш
 		cached, found := h.cache.Get(name, q.Qtype)
 		if found {
+			h.logger.Debug("cache hit", "name", name, "type", dns.TypeToString[q.Qtype], "id", r.Id)
+
 			for _, rr := range cached.Answer {
 				if rr.Header().Name == name && rr.Header().Rrtype == q.Qtype {
 					m.Answer = append(m.Answer, rr)
@@ -170,10 +179,12 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 			}
 			// Если в кэше был NXDOMAIN, копируем rcode
 			if cached.Rcode == dns.RcodeNameError {
+				h.logger.Info("cache hit NXDOMAIN", "name", name, "type", dns.TypeToString[q.Qtype], "id", r.Id)
 				m.SetRcode(r, dns.RcodeNameError)
 			}
 			continue
 		}
+		h.logger.Debug("cache miss", "name", name, "type", dns.TypeToString[q.Qtype], "id", r.Id)
 
 		// 2. Проверяем локальную зону
 		if h.isLocalZone(name) {
@@ -185,7 +196,7 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 				m.Authoritative = true
 				continue
 			}
-
+			h.logger.Debug("local resolution failed", "name", name, "type", dns.TypeToString[q.Qtype], "id", r.Id, "error", err.Error())
 			// Запись не найдена в локальной зоне — NODATA (NOERROR + пустой Answer)
 			// Не возвращаем NXDOMAIN, так как зона существует
 			continue
@@ -196,6 +207,7 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	// 3. Отправляем upstream-запрос для нелокальных вопросов
 	if len(proxyQuestions) > 0 {
+		h.logger.Info("forwarding to upstream", "question_count", len(proxyQuestions), "id", r.Id)
 		req := new(dns.Msg)
 		req.SetReply(r)
 		req.Question = proxyQuestions
@@ -208,6 +220,7 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 		resp, _, err := h.client.Exchange(req, h.upstreamAddr)
 		if err != nil || resp == nil {
+			h.logger.Error("failed to forward to upstream", "id", r.Id, "error", err.Error())
 			m.SetRcode(r, dns.RcodeServerFailure)
 			w.WriteMsg(m)
 			return
@@ -220,6 +233,7 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		m.Rcode = resp.Rcode
 	} else if !anyLocal && len(m.Answer) == 0 && len(r.Question) > 0 {
 		// Все вопросы были из кэша, но ответов нет — ServerFailure
+		h.logger.Info("no answers found", "id", r.Id)
 		m.SetRcode(r, dns.RcodeServerFailure)
 	}
 

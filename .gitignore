@@ -1,2 +1,6 @@
 *.db
 .env
+
+# compiler binary files
+*.exe
+dnso

@@ -9,8 +9,10 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
+	"slices"
 	"syscall"
 
 	"dnso/internal/repository"
@@ -62,10 +64,52 @@ func logLevelFromString(level string) slog.Level {
 	}
 }
 
+// parseUpstreams принимает строку с адресами upstream-серверов, разделёнными запятыми,
+// и возвращает слайс строк с корректными адресами и портами по умолчанию, если не указаны.
+func parseUpstreams(adresses string) ([]string, error) {
+	result := []string{}
+	rawAddrs := strings.Split(adresses, ",")
+	if len(rawAddrs) == 0 {
+		return []string{}, nil
+	}
+
+	for _, v := range rawAddrs {
+		v = strings.TrimSpace(v)
+
+		if len(v) == 0 {
+			continue
+		}
+
+		addr, err := netip.ParseAddrPort(v)
+		var addrString string
+		if err != nil {
+			parseAddr, err := netip.ParseAddr(v)
+			if err != nil {
+				return []string{}, fmt.Errorf("Invalid upstream address: %s, skipping. Error: %v", v, err)
+			} else {
+				addrString = netip.AddrPortFrom(parseAddr, 53).String()
+			}
+		} else {
+			addrString = addr.String()
+		}
+
+		if slices.Contains(result, addrString) {
+			continue
+		}
+
+		result = append(result, addrString)
+	}
+
+	return result, nil
+}
+
 func runServer() error {
 	dbPath := envOrDefault("DNSO_DB_PATH", "./dnso.db")
 	bindAddr := envOrDefault("DNSO_BIND_ADDR", ":53")
-	upstream := envOrDefault("DNSO_UPSTREAM", "8.8.8.8:53")
+	upstreams, err := parseUpstreams(envOrDefault("DNSO_UPSTREAMS", "8.8.8.8:53"))
+	if err != nil {
+		log.Fatalf("failed to parse upstreams: %s", err)
+	}
 	enableCache := envOrDefault("DNSO_CACHE", "true") == "true"
 	webAddr := envOrDefault("DNSO_WEB_ADDR", ":8080")
 	logLevel := logLevelFromString(envOrDefault("LOG_LEVEL", "info"))
@@ -73,7 +117,7 @@ func runServer() error {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 
 	fmt.Println("Apply migrations")
-	err := runMigrateUp()
+	err = runMigrateUp()
 	if err != nil {
 		return fmt.Errorf("Failed to apply migrations: %w", err)
 	}
@@ -100,12 +144,11 @@ func runServer() error {
 	}
 
 	// Создаём DNS-клиент для upstream
-	dnsClient := new(dns.Client)
+	dnsClient := server.NewExchanger(upstreams, logger.With("handler_type", "upstream client"))
 
 	// Создаём хендлер
 	handler := server.NewHandler(&server.HandlerConfig{
 		Client:        dnsClient,
-		UpstreamAddr:  upstream,
 		ZoneStorage:   zoneStorage,
 		RecordStorage: recordStorage,
 		Cache:         cache,
@@ -134,7 +177,7 @@ func runServer() error {
 
 	// Запускаем DNS-сервер
 	go func() {
-		log.Printf("DNS server listening on %s (upstream: %s)", bindAddr, upstream)
+		log.Printf("DNS server listening on %s (upstream: %s)", bindAddr, strings.Join(upstreams, ", "))
 		if err := srv.ListenAndServe(); err != nil {
 			log.Fatalf("Failed to start DNS server: %v", err)
 		}

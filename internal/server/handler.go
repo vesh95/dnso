@@ -14,8 +14,7 @@ import (
 )
 
 type HandlerConfig struct {
-	Client        *dns.Client
-	UpstreamAddr  string
+	Client        *UpstreamExchanger
 	ZoneStorage   repository.ZoneRepository
 	RecordStorage repository.RecordRepository
 	Cache         *DNSCache
@@ -23,8 +22,7 @@ type HandlerConfig struct {
 }
 
 type Handler struct {
-	client        *dns.Client
-	upstreamAddr  string
+	client        *UpstreamExchanger
 	zoneStorage   repository.ZoneRepository
 	recordStorage repository.RecordRepository
 	cache         *DNSCache
@@ -37,7 +35,6 @@ type Handler struct {
 func NewHandler(config *HandlerConfig) *Handler {
 	h := &Handler{
 		client:        config.Client,
-		upstreamAddr:  config.UpstreamAddr,
 		zoneStorage:   config.ZoneStorage,
 		recordStorage: config.RecordStorage,
 		cache:         config.Cache,
@@ -228,7 +225,7 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 			req.SetEdns0(opt.UDPSize(), false)
 		}
 
-		resp, _, err := h.client.ExchangeContext(ctx, req, h.upstreamAddr)
+		resp, err := h.client.Exchange(ctx, req)
 		if err != nil || resp == nil {
 			h.logger.ErrorContext(ctx, "failed to forward to upstream", "id", r.Id, "error", err.Error())
 			m.SetRcode(r, dns.RcodeServerFailure)

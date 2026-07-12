@@ -70,7 +70,6 @@ func TestParseUpstreams(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer recover() // Recover from panic for invalid addresses
 			result, err := parseUpstreams(tt.input)
 			if tt.err {
 				assert.Error(t, err)

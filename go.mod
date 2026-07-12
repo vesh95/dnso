@@ -3,7 +3,6 @@ module dnso
 go 1.26.1
 
 require (
-	github.com/go-openapi/testify/v2 v2.6.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/miekg/dns v1.1.72

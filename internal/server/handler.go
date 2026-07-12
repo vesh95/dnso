@@ -209,9 +209,8 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	if len(proxyQuestions) > 0 {
 		h.logger.Info("forwarding to upstream", "question_count", len(proxyQuestions), "id", r.Id)
 		req := new(dns.Msg)
-		req.SetReply(r)
+		req.Id = r.Id
 		req.Question = proxyQuestions
-		req.Rcode = dns.RcodeSuccess
 		req.RecursionDesired = r.RecursionDesired
 
 		if opt := r.IsEdns0(); opt != nil {

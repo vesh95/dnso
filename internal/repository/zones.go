@@ -14,7 +14,7 @@ type Zone struct {
 	Refresh int64
 	Retry   int64
 	Expire  int64
-	Serial  int64
+	Serial  uint32
 }
 
 type ZoneRepository interface {
@@ -81,7 +81,7 @@ func (s *ZoneStorage) GetId(ctx context.Context, id uint64) (*Zone, error) {
 }
 
 func (s *ZoneStorage) Add(ctx context.Context, name string, ttl, refresh, retry, expire int64) (*Zone, error) {
-	res, err := s.db.ExecContext(ctx, "INSERT INTO zones (name, ttl, refresh, retry, expire, serial) VALUES ($1, $2, $3, $4, $5, $6)", name, ttl, refresh, retry, expire, time.Now().UnixMilli())
+	res, err := s.db.ExecContext(ctx, "INSERT INTO zones (name, ttl, refresh, retry, expire, serial) VALUES ($1, $2, $3, $4, $5, $6)", name, ttl, refresh, retry, expire, time.Now().Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (s *ZoneStorage) Add(ctx context.Context, name string, ttl, refresh, retry,
 }
 
 func (s *ZoneStorage) Update(ctx context.Context, name string, ttl, refresh, retry, expire int64) (*Zone, error) {
-	res, err := s.db.ExecContext(ctx, "UPDATE zones SET ttl = $1, refresh = $2, retry = $3, expire = $4, serial = $5 WHERE name = $6", ttl, refresh, retry, expire, time.Now().UnixMilli(), name)
+	res, err := s.db.ExecContext(ctx, "UPDATE zones SET ttl = $1, refresh = $2, retry = $3, expire = $4, serial = $5 WHERE name = $6", ttl, refresh, retry, expire, time.Now().Unix(), name)
 	if err != nil {
 		return nil, err
 	}

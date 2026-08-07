@@ -53,9 +53,9 @@ func setupTest(t *testing.T) (*Server, *sql.DB) {
 	return s, db
 }
 
-func seedZone(t *testing.T, db *sql.DB, name string, ttl int64) *repository.Zone {
+func seedZone(t *testing.T, db *sql.DB, name string, ttl, refresh, retry, expire int64) *repository.Zone {
 	z := repository.NewZoneStorage(db)
-	zone, err := z.Add(context.Background(), name, ttl)
+	zone, err := z.Add(context.Background(), name, ttl, refresh, retry, expire)
 	require.NoError(t, err)
 	return zone
 }
@@ -99,8 +99,8 @@ func TestWeb_ListZones(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	seedZone(t, db, "example.com.", 300)
-	seedZone(t, db, "test.org.", 600)
+	seedZone(t, db, "example.com.", 300, 3600, 300, 86400)
+	seedZone(t, db, "test.org.", 600, 3601, 301, 86401)
 
 	w := request(t, s, "GET", "/api/zones", "")
 
@@ -112,15 +112,25 @@ func TestWeb_ListZones(t *testing.T) {
 	require.Len(t, zones, 2)
 	assert.Equal(t, "example.com.", zones[0].Name)
 	assert.Equal(t, int64(300), zones[0].TTL)
+	assert.Equal(t, int64(3600), zones[0].Refresh)
+	assert.Equal(t, int64(300), zones[0].Retry)
+	assert.Equal(t, int64(86400), zones[0].Expire)
+	assert.NotZero(t, zones[0].Serial)
+
 	assert.Equal(t, "test.org.", zones[1].Name)
 	assert.Equal(t, int64(600), zones[1].TTL)
+	assert.Equal(t, int64(3601), zones[1].Refresh)
+	assert.Equal(t, int64(301), zones[1].Retry)
+	assert.Equal(t, int64(86401), zones[1].Expire)
+	assert.NotZero(t, zones[1].Serial)
+
 }
 
 func TestWeb_GetZone(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	seedZone(t, db, "example.com.", 300)
+	seedZone(t, db, "example.com.", 300, 3600, 400, 86400)
 
 	w := request(t, s, "GET", "/api/zones/example.com.", "")
 
@@ -131,6 +141,10 @@ func TestWeb_GetZone(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "example.com.", zone.Name)
 	assert.Equal(t, int64(300), zone.TTL)
+	assert.Equal(t, int64(3600), zone.Refresh)
+	assert.Equal(t, int64(400), zone.Retry)
+	assert.Equal(t, int64(86400), zone.Expire)
+
 }
 
 func TestWeb_GetZone_NotFound(t *testing.T) {
@@ -199,9 +213,9 @@ func TestWeb_CreateZone_Duplicate(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	seedZone(t, db, "example.com.", 300)
+	seedZone(t, db, "example.com.", 300, 3600, 400, 8640000)
 
-	w := request(t, s, "POST", "/api/zones", `{"name":"example.com.","ttl":300}`)
+	w := request(t, s, "POST", "/api/zones", `{"name":"example.com.","ttl":300,"refresh":3600,"retry":400,"expire":8640000}`)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
 }
@@ -210,9 +224,9 @@ func TestWeb_UpdateZone(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	seedZone(t, db, "example.com.", 300)
+	seedZone(t, db, "example.com.", 300, 3600, 400, 86400)
 
-	w := request(t, s, "PUT", "/api/zones/example.com.", `{"ttl":600}`)
+	w := request(t, s, "PUT", "/api/zones/example.com.", `{"ttl":600,"refresh":3601,"retry":401,"expire":8640001}`)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -221,13 +235,17 @@ func TestWeb_UpdateZone(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "example.com.", zone.Name)
 	assert.Equal(t, int64(600), zone.TTL)
+	assert.Equal(t, int64(3601), zone.Refresh)
+	assert.Equal(t, int64(401), zone.Retry)
+	assert.Equal(t, int64(8640001), zone.Expire)
+
 }
 
 func TestWeb_UpdateZone_NotFound(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	w := request(t, s, "PUT", "/api/zones/nonexistent.com.", `{"ttl":600}`)
+	w := request(t, s, "PUT", "/api/zones/nonexistent.com.", `{"ttl":600,"refresh":3601,"retry":401,"expire":8640001}`)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
@@ -236,7 +254,7 @@ func TestWeb_DeleteZone(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	seedZone(t, db, "example.com.", 300)
+	seedZone(t, db, "example.com.", 300, 3600, 400, 86400)
 
 	w := request(t, s, "DELETE", "/api/zones/example.com.", "")
 
@@ -262,7 +280,7 @@ func TestWeb_ListRecords_Empty(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	seedZone(t, db, "example.com.", 300)
+	seedZone(t, db, "example.com.", 300, 3600, 400, 86400)
 
 	w := request(t, s, "GET", "/api/zones/example.com./records", "")
 
@@ -274,7 +292,7 @@ func TestWeb_ListRecords(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	zone := seedZone(t, db, "example.com.", 300)
+	zone := seedZone(t, db, "example.com.", 300, 3600, 400, 86400)
 	seedRecord(t, db, zone.Id, "test.example.com.", "A", "192.168.1.1", 300)
 	seedRecord(t, db, zone.Id, "mail.example.com.", "MX", "10 mail.example.com.", 600)
 
@@ -305,7 +323,7 @@ func TestWeb_CreateRecord(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	seedZone(t, db, "example.com.", 300)
+	seedZone(t, db, "example.com.", 300, 3600, 400, 86400)
 
 	w := request(t, s, "POST", "/api/zones/example.com./records",
 		`{"domain":"test.example.com.","type":"A","rdata":"192.168.1.1","ttl":300}`)
@@ -326,7 +344,7 @@ func TestWeb_CreateRecord_DefaultTTL(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	seedZone(t, db, "example.com.", 600)
+	seedZone(t, db, "example.com.", 600, 3600, 400, 86400)
 
 	w := request(t, s, "POST", "/api/zones/example.com./records",
 		`{"domain":"test.example.com.","type":"A","rdata":"192.168.1.1","ttl":0}`)
@@ -354,7 +372,7 @@ func TestWeb_CreateRecord_MissingFields(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	seedZone(t, db, "example.com.", 300)
+	seedZone(t, db, "example.com.", 300, 3600, 400, 86400)
 
 	w := request(t, s, "POST", "/api/zones/example.com./records",
 		`{"domain":"","type":"A","rdata":"","ttl":300}`)
@@ -366,7 +384,7 @@ func TestWeb_UpdateRecord(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	zone := seedZone(t, db, "example.com.", 300)
+	zone := seedZone(t, db, "example.com.", 300, 3600, 400, 86400)
 	rec := seedRecord(t, db, zone.Id, "test.example.com.", "A", "192.168.1.1", 300)
 
 	body := fmt.Sprintf(
@@ -390,7 +408,7 @@ func TestWeb_UpdateRecord_NotFound(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	zone := seedZone(t, db, "example.com.", 300)
+	zone := seedZone(t, db, "example.com.", 300, 3600, 400, 86400)
 
 	body := fmt.Sprintf(
 		`{"zone_id":%d,"domain":"test.example.com.","type":"A","rdata":"192.168.1.1","ttl":300}`,
@@ -415,7 +433,7 @@ func TestWeb_DeleteRecord(t *testing.T) {
 	s, db := setupTest(t)
 	defer db.Close()
 
-	zone := seedZone(t, db, "example.com.", 300)
+	zone := seedZone(t, db, "example.com.", 300, 3600, 400, 86400)
 	rec := seedRecord(t, db, zone.Id, "test.example.com.", "A", "192.168.1.1", 300)
 
 	w := request(t, s, "DELETE", fmt.Sprintf("/api/records/%d", rec.Id), "")

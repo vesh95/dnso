@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,12 +15,15 @@ func TestZoneAdd(t *testing.T) {
 	defer db.Close()
 
 	s := NewZoneStorage(db)
-	z, err := s.Add(context.Background(), "example.com.", 300)
+	z, err := s.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 
 	require.NoError(t, err)
 	assert.NotZero(t, z.Id)
 	assert.Equal(t, "example.com.", z.Name)
 	assert.Equal(t, int64(300), z.TTL)
+	assert.Equal(t, int64(3600), z.Refresh)
+	assert.Equal(t, int64(300), z.Retry)
+	assert.Equal(t, int64(86400), z.Expire)
 }
 
 func TestZoneAddDuplicate(t *testing.T) {
@@ -27,11 +31,12 @@ func TestZoneAddDuplicate(t *testing.T) {
 	defer db.Close()
 
 	s := NewZoneStorage(db)
-	_, err := s.Add(context.Background(), "example.com.", 300)
+	_, err := s.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.NoError(t, err)
 
-	_, err = s.Add(context.Background(), "example.com.", 300)
+	_, err = s.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.Error(t, err)
+
 }
 
 func TestZoneGet(t *testing.T) {
@@ -39,7 +44,7 @@ func TestZoneGet(t *testing.T) {
 	defer db.Close()
 
 	s := NewZoneStorage(db)
-	z, err := s.Add(context.Background(), "example.com.", 300)
+	z, err := s.Add(context.Background(), "example.com.", 300, 3601, 301, 86401)
 	require.NoError(t, err)
 
 	got, err := s.Get(context.Background(), "example.com.")
@@ -64,7 +69,7 @@ func TestZoneGetId(t *testing.T) {
 	defer db.Close()
 
 	s := NewZoneStorage(db)
-	z, err := s.Add(context.Background(), "example.com.", 300)
+	z, err := s.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.NoError(t, err)
 
 	got, err := s.GetId(context.Background(), z.Id)
@@ -89,13 +94,20 @@ func TestZoneUpdate(t *testing.T) {
 	defer db.Close()
 
 	s := NewZoneStorage(db)
-	_, err := s.Add(context.Background(), "example.com.", 300)
+	z, err := s.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.NoError(t, err)
 
-	updated, err := s.Update(context.Background(), "example.com.", 600)
+	time.Sleep(1 * time.Second)
+
+	updated, err := s.Update(context.Background(), "example.com.", 600, 3601, 301, 86401)
 	require.NoError(t, err)
 	assert.Equal(t, int64(600), updated.TTL)
 	assert.Equal(t, "example.com.", updated.Name)
+	assert.Equal(t, int64(3601), updated.Refresh)
+	assert.Equal(t, int64(301), updated.Retry)
+	assert.Equal(t, int64(86401), updated.Expire)
+
+	assert.Greater(t, updated.Serial, z.Serial)
 }
 
 func TestZoneUpdateNotFound(t *testing.T) {
@@ -103,7 +115,7 @@ func TestZoneUpdateNotFound(t *testing.T) {
 	defer db.Close()
 
 	s := NewZoneStorage(db)
-	_, err := s.Update(context.Background(), "nonexistent.com.", 600)
+	_, err := s.Update(context.Background(), "nonexistent.com.", 300, 3600, 300, 86400)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rows not affected")
 }
@@ -113,7 +125,7 @@ func TestZoneDelete(t *testing.T) {
 	defer db.Close()
 
 	s := NewZoneStorage(db)
-	_, err := s.Add(context.Background(), "example.com.", 300)
+	_, err := s.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.NoError(t, err)
 
 	ok, err := s.Delete(context.Background(), "example.com.")

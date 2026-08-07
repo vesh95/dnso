@@ -106,8 +106,11 @@ func (s *Server) handleGetZone(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name string `json:"name"`
-		TTL  int64  `json:"ttl"`
+		Name    string `json:"name"`
+		TTL     int64  `json:"ttl"`
+		Refresh int64  `json:"refresh"`
+		Retry   int64  `json:"retry"`
+		Expire  int64  `json:"expire"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
@@ -126,7 +129,7 @@ func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
 		req.Name += "."
 	}
 
-	zone, err := s.zoneStorage.Add(r.Context(), req.Name, req.TTL)
+	zone, err := s.zoneStorage.Add(r.Context(), req.Name, req.TTL, req.Refresh, req.Retry, req.Expire)
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		return
@@ -141,7 +144,10 @@ func (s *Server) handleUpdateZone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		TTL int64 `json:"ttl"`
+		TTL     int64 `json:"ttl"`
+		Refresh int64 `json:"refresh"`
+		Retry   int64 `json:"retry"`
+		Expire  int64 `json:"expire"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
@@ -151,7 +157,7 @@ func (s *Server) handleUpdateZone(w http.ResponseWriter, r *http.Request) {
 		req.TTL = 300
 	}
 
-	zone, err := s.zoneStorage.Update(r.Context(), name, req.TTL)
+	zone, err := s.zoneStorage.Update(r.Context(), name, req.TTL, req.Refresh, req.Retry, req.Expire)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

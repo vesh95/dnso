@@ -18,6 +18,8 @@ import (
 
 var MigrationsFS embed.FS
 
+var steps int
+
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Run database migrations",
@@ -47,6 +49,9 @@ func init() {
 	rootCmd.AddCommand(migrateCmd)
 	migrateCmd.AddCommand(migrateUpCmd)
 	migrateCmd.AddCommand(migrateDownCmd)
+
+	migrateDownCmd.Flags().IntVar(&steps, "steps", 0, "Cteps count")
+
 }
 
 func dbPath() string {
@@ -96,6 +101,15 @@ func runMigrateDown() error {
 		return err
 	}
 	defer m.Close()
+
+	if steps != 0 {
+		log.Printf("Migrations rolled back to %d steps", steps)
+		err = m.Steps(-steps)
+		if err != nil {
+			return fmt.Errorf("migrate down failed: %w", err)
+		}
+		return nil
+	}
 
 	if err := m.Down(); err != nil {
 		if err == migrate.ErrNoChange {

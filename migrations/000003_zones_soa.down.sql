@@ -1,0 +1,3 @@
+ALTER TABLE zones DROP COLUMN refresh;
+ALTER TABLE zones DROP COLUMN retry;
+ALTER TABLE zones DROP COLUMN expire;

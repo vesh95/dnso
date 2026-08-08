@@ -13,7 +13,7 @@ func TestRecordAdd(t *testing.T) {
 	defer db.Close()
 
 	zone := NewZoneStorage(db)
-	z, err := zone.Add(context.Background(), "example.com.", 300)
+	z, err := zone.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.NoError(t, err)
 
 	s := NewRecordStorage(db)
@@ -31,7 +31,7 @@ func TestRecordGet(t *testing.T) {
 	defer db.Close()
 
 	zone := NewZoneStorage(db)
-	z, err := zone.Add(context.Background(), "example.com.", 300)
+	z, err := zone.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.NoError(t, err)
 
 	s := NewRecordStorage(db)
@@ -61,7 +61,7 @@ func TestRecordGetId(t *testing.T) {
 	defer db.Close()
 
 	zone := NewZoneStorage(db)
-	z, err := zone.Add(context.Background(), "example.com.", 300)
+	z, err := zone.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.NoError(t, err)
 
 	s := NewRecordStorage(db)
@@ -89,7 +89,7 @@ func TestRecordUpdate(t *testing.T) {
 	defer db.Close()
 
 	zone := NewZoneStorage(db)
-	z, err := zone.Add(context.Background(), "example.com.", 300)
+	z, err := zone.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.NoError(t, err)
 
 	s := NewRecordStorage(db)
@@ -109,7 +109,7 @@ func TestRecordUpdateNotFound(t *testing.T) {
 	defer db.Close()
 
 	zone := NewZoneStorage(db)
-	z, err := zone.Add(context.Background(), "example.com.", 300)
+	z, err := zone.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.NoError(t, err)
 
 	s := NewRecordStorage(db)
@@ -123,7 +123,7 @@ func TestRecordDelete(t *testing.T) {
 	defer db.Close()
 
 	zone := NewZoneStorage(db)
-	z, err := zone.Add(context.Background(), "example.com.", 300)
+	z, err := zone.Add(context.Background(), "example.com.", 300, 3600, 300, 86400)
 	require.NoError(t, err)
 
 	s := NewRecordStorage(db)

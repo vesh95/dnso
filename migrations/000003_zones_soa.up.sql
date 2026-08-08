@@ -1,0 +1,4 @@
+ALTER TABLE zones ADD COLUMN refresh integer DEFAULT 3600;
+ALTER TABLE zones ADD COLUMN retry integer DEFAULT 300;
+ALTER TABLE zones ADD COLUMN expire integer DEFAULT 86400;
+

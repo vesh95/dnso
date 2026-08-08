@@ -89,25 +89,53 @@ func (h *Handler) makeLocalRRs(name string, qtype uint16) ([]dns.RR, error) {
 		return nil, fmt.Errorf("unsupported DNS type: %d", qtype)
 	}
 
-	records, err := h.recordStorage.Get(context.Background(), name, typeStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get records: %w", err)
-	}
-	if len(records) == 0 {
-		return nil, fmt.Errorf("no records found for %s type %s", name, typeStr)
-	}
-
-	rrs := make([]dns.RR, 0, len(records))
-	for _, rec := range records {
-		rrStr := fmt.Sprintf("%s %d %s %s", name, rec.TTL, typeStr, rec.Rdata)
-		rr, err := dns.NewRR(rrStr)
+	if qtype == dns.TypeSOA {
+		zone, err := h.zoneStorage.Get(context.Background(), name)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse RR %q: %w", rrStr, err)
+			return nil, fmt.Errorf("failed to get records: %w", err)
 		}
-		rrs = append(rrs, rr)
-	}
 
-	return rrs, nil
+		soa := &dns.SOA{
+			Hdr: dns.RR_Header{
+				Name:   zone.Name,
+				Rrtype: dns.TypeSOA,
+				Class:  dns.ClassINET,
+				Ttl:    uint32(zone.TTL),
+			},
+			Ns:      "ns." + zone.Name,
+			Mbox:    "admin." + zone.Name,
+			Serial:  uint32(zone.Serial),
+			Refresh: uint32(zone.Refresh),
+			Retry:   uint32(zone.Retry),
+			Expire:  uint32(zone.Expire),
+			Minttl:  300,
+		}
+
+		rrs := make([]dns.RR, 0, 1)
+		rrs = append(rrs, soa)
+
+		return rrs, nil
+	} else {
+		records, err := h.recordStorage.Get(context.Background(), name, typeStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get records: %w", err)
+		}
+		if len(records) == 0 {
+			return nil, fmt.Errorf("no records found for %s type %s", name, typeStr)
+		}
+
+		rrs := make([]dns.RR, 0, len(records))
+		for _, rec := range records {
+			rrStr := fmt.Sprintf("%s %d %s %s", name, rec.TTL, typeStr, rec.Rdata)
+			rr, err := dns.NewRR(rrStr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse RR %q: %w", rrStr, err)
+			}
+			rrs = append(rrs, rr)
+		}
+
+		return rrs, nil
+	}
 }
 
 // resolveLocal пытается разрешить имя через локальное хранилище.

@@ -26,11 +26,15 @@
                         <th>ID</th>
                         <th>Имя зоны</th>
                         <th>TTL</th>
+                        <th>Refresh</th>
+                        <th>Retry</th>
+                        <th>Expire</th>
+                        <th>Serial</th>
                         <th>Действия</th>
                     </tr>
                 </thead>
                 <tbody id="zones-tbody">
-                    <tr><td colspan="4" class="loading">Загрузка...</td></tr>
+                    <tr><td colspan="8" class="loading">Загрузка...</td></tr>
                 </tbody>
             </table>
         </section>
@@ -73,6 +77,18 @@
                     TTL:
                     <input type="number" id="zone-ttl" value="300" min="1">
                 </label>
+                <label>
+                    Refresh:
+                    <input type="number" id="zone-refresh" value="3600" min="1">
+                </label>
+                <label>
+                    Retry:
+                    <input type="number" id="zone-retry" value="300" min="1">
+                </label>
+                <label>
+                    Expire
+                    <input type="number" id="zone-expire" value="86400" min="1">
+                </label>
                 <button type="submit" class="btn btn-primary">Сохранить</button>
             </form>
         </div>
@@ -98,7 +114,6 @@
                         <option value="MX">MX</option>
                         <option value="TXT">TXT</option>
                         <option value="NS">NS</option>
-                        <option value="SOA">SOA</option>
                     </select>
                 </label>
                 <label>

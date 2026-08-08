@@ -31,8 +31,12 @@ function renderZones(zones) {
             <td>${z.Id}</td>
             <td><a class="zone-link" onclick="showRecords('${escapeHtml(z.Name)}')">${escapeHtml(z.Name)}</a></td>
             <td>${z.TTL}</td>
+            <td>${z.Refresh}</td>
+            <td>${z.Retry}</td>
+            <td>${z.Expire}</td>
+            <td>${z.Serial}</td>
             <td class="actions">
-                <button class="btn btn-sm" onclick="showEditZoneModal('${escapeHtml(z.Name)}', ${z.TTL})">✏️</button>
+                <button class="btn btn-sm" onclick="showEditZoneModal('${escapeHtml(z.Name)}', ${z.TTL}, ${z.Refresh}, ${z.Retry}, ${z.Expire})">✏️</button>
                 <button class="btn btn-sm btn-danger" onclick="confirmDeleteZone('${escapeHtml(z.Name)}')">🗑️</button>
             </td>
         </tr>
@@ -96,15 +100,21 @@ function showAddZoneModal() {
     document.getElementById('zone-name').value = '';
     document.getElementById('zone-name').disabled = false;
     document.getElementById('zone-ttl').value = '300';
+    document.getElementById('zone-refresh').value = '3600';
+    document.getElementById('zone-retry').value = '300';
+    document.getElementById('zone-expire').value = '86400';
     document.getElementById('zone-modal').classList.remove('hidden');
 }
 
-function showEditZoneModal(name, ttl) {
+function showEditZoneModal(name, ttl, refresh, retry, expire) {
     document.getElementById('zone-modal-title').textContent = 'Редактировать зону';
     document.getElementById('zone-edit-name').value = name;
     document.getElementById('zone-name').value = name;
     document.getElementById('zone-name').disabled = true;
     document.getElementById('zone-ttl').value = ttl;
+    document.getElementById('zone-refresh').value = refresh;
+    document.getElementById('zone-retry').value = retry;
+    document.getElementById('zone-expire').value = expire;
     document.getElementById('zone-modal').classList.remove('hidden');
 }
 
@@ -114,6 +124,9 @@ async function saveZone(event) {
     const editName = document.getElementById('zone-edit-name').value;
     const name = document.getElementById('zone-name').value.trim();
     const ttl = parseInt(document.getElementById('zone-ttl').value) || 300;
+    const refresh = parseInt(document.getElementById('zone-refresh').value);
+    const retry = parseInt(document.getElementById('zone-retry').value);
+    const expire = parseInt(document.getElementById('zone-expire').value)
 
     const isEdit = !!editName;
 
@@ -123,13 +136,13 @@ async function saveZone(event) {
             res = await fetch(`/api/zones/${encodeURIComponent(editName)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ttl }),
+                body: JSON.stringify({ ttl, refresh, retry, expire }),
             });
         } else {
             res = await fetch('/api/zones', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, ttl }),
+                body: JSON.stringify({ name, ttl, refresh, retry, expire }),
             });
         }
 

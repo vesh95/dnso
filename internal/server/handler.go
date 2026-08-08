@@ -41,12 +41,12 @@ func NewHandler(config *HandlerConfig) *Handler {
 		localZones:    make(map[string]struct{}),
 		logger:        config.Logger,
 	}
-	h.refreshZones()
+	h.RefreshZones()
 	return h
 }
 
-// refreshZones загружает список локальных зон из БД в in-memory кэш.
-func (h *Handler) refreshZones() {
+// RefreshZones загружает список локальных зон из БД в in-memory кэш.
+func (h *Handler) RefreshZones() {
 	zones, err := h.zoneStorage.GetAll(context.Background())
 	if err != nil {
 		return

@@ -165,7 +165,7 @@ func runServer() error {
 	}
 
 	// Создаём веб-сервер
-	webServer := web.NewServer(db, logger.With("handler_type", "web"))
+	webServer := web.NewServer(db, logger.With("handler_type", "web"), handler.RefreshZones)
 	httpServer := &http.Server{
 		Addr:    webAddr,
 		Handler: webServer,

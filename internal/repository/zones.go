@@ -104,8 +104,12 @@ func (s *ZoneStorage) Update(ctx context.Context, name string, ttl, refresh, ret
 	}
 
 	affected, err := res.RowsAffected()
-	if affected == 0 || err != nil {
-		return nil, fmt.Errorf("rows not affected: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("affected rows error: %w", err)
+	}
+
+	if affected == 0 {
+		return nil, fmt.Errorf("rows not affected")
 	}
 
 	return s.Get(ctx, name)
@@ -119,7 +123,7 @@ func (s *ZoneStorage) Delete(ctx context.Context, name string) (bool, error) {
 
 	affected, err := res.RowsAffected()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("affected rows error: %w", err)
 	}
 	if affected == 0 {
 		return false, fmt.Errorf("rows not affected")

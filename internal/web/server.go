@@ -27,14 +27,16 @@ type Server struct {
 	mux           *http.ServeMux
 	tmpl          *template.Template
 	logger        *slog.Logger
+	refreshZones  func()
 }
 
-func NewServer(db *sql.DB, logger *slog.Logger) *Server {
+func NewServer(db *sql.DB, logger *slog.Logger, refeshZones func()) *Server {
 	s := &Server{
 		zoneStorage:   repository.NewZoneStorage(db),
 		recordStorage: repository.NewRecordStorage(db),
 		mux:           http.NewServeMux(),
 		logger:        logger,
+		refreshZones:  refeshZones,
 	}
 
 	// Парсим шаблоны из embed.FS
@@ -53,7 +55,11 @@ func NewServer(db *sql.DB, logger *slog.Logger) *Server {
 	s.mux.HandleFunc("DELETE /api/records/{id}", s.handleDeleteRecord)
 
 	// Static files
-	staticSub, _ := fs.Sub(staticFS, "static")
+	staticSub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		panic(err)
+	}
+
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 
 	// SPA — все остальные пути отдаём index.html
@@ -134,6 +140,7 @@ func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		return
 	}
+	s.refreshZones()
 	writeJSON(w, http.StatusCreated, zone)
 }
 
@@ -176,6 +183,7 @@ func (s *Server) handleDeleteZone(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	s.refreshZones()
 	w.WriteHeader(http.StatusNoContent)
 }
 

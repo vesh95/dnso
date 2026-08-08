@@ -53,7 +53,11 @@ func NewServer(db *sql.DB, logger *slog.Logger) *Server {
 	s.mux.HandleFunc("DELETE /api/records/{id}", s.handleDeleteRecord)
 
 	// Static files
-	staticSub, _ := fs.Sub(staticFS, "static")
+	staticSub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		panic(err)
+	}
+
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 
 	// SPA — все остальные пути отдаём index.html

@@ -89,6 +89,6 @@ MIT — подробнее в файле [LICENSE](LICENSE).
 
 ---
 
-## Dokcer
+## Docker
 
 [Docker Hub](https://hub.docker.com/r/vesh95/dnso/)

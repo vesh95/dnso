@@ -35,6 +35,12 @@ go build -o dnso .
 # Применение миграций
 ./dnso migrate up
 
+# Откатить миграции
+./dnso migrate down
+
+# Откатить n миграций
+./dnso migrate down --steps <n>
+
 # Запуск сервера
 ./dnso serve
 ```

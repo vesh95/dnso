@@ -1,0 +1,20 @@
+# Проверка RP
+name: PR Check
+
+on:
+  pull_request:
+    branches:
+      - '*'
+  
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: golang:1.26.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Unit Tests
+        run: GOOS=linux GOARCH=amd64 go test ./...
+
+      - name: Vet
+        run: go vet ./...

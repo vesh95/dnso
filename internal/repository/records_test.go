@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -146,4 +147,39 @@ func TestRecordDeleteNotFound(t *testing.T) {
 	_, err := s.Delete(context.Background(), 999)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rows not affected")
+}
+
+func TestCreateWuthInvalidZone(t *testing.T) {
+	db := upDatabase(t)
+	defer db.Close()
+
+	s := NewRecordStorage(db)
+	_, err := s.Add(context.Background(), 999, "example.com.", "A", "192.168.0.1", 3600)
+	require.Error(t, err)
+}
+
+func TestCascadeDelteRecords(t *testing.T) {
+	db := upDatabase(t)
+	defer db.Close()
+
+	zs := NewZoneStorage(db)
+	z, err := zs.Add(context.Background(), "com.", 3600, 3600, 300, 3600)
+	require.NoError(t, err)
+
+	s := NewRecordStorage(db)
+	domain1, err := s.Add(context.Background(), z.Id, "example1.com.", "A", "192.168.0.1", 3600)
+	require.NoError(t, err)
+
+	domain2, err := s.Add(context.Background(), z.Id, "example2.com.", "A", "192.168.0.1", 3600)
+	require.NoError(t, err)
+
+	ok, err := zs.Delete(context.Background(), z.Name)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	_, err = s.GetId(context.Background(), domain1.Id)
+	require.ErrorIs(t, err, sql.ErrNoRows)
+
+	_, err = s.GetId(context.Background(), domain2.Id)
+	require.ErrorIs(t, err, sql.ErrNoRows)
 }

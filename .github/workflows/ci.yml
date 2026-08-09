@@ -1,11 +1,12 @@
-# Проверка RP
-name: PR Check
+# Отдельная проверка для master ветки
+name: CI
 
 on:
-  pull_request:
+  push:
     branches:
-      - '*'
-  
+      - master
+      - main  
+
 jobs:
   test:
     runs-on: ubuntu-latest

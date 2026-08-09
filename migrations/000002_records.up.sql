@@ -5,7 +5,7 @@ CREATE TABLE records (
     type     VARCHAR(10) NOT NULL,          -- A, AAAA, CNAME, MX, TXT, NS и т.д.
     rdata       TEXT NOT NULL,                  -- значение: IP, имя, строка
     ttl         INTEGER,                        -- NULL = использовать TTL зоны
-    FOREIGN KEY (zone_id) REFERENCES zones(id)
+    FOREIGN KEY (zone_id) REFERENCES zones(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE INDEX idx_records_domain_type ON records(domain, type);

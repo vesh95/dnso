@@ -127,6 +127,10 @@ func runServer() error {
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
+	_, err = db.Exec("PRAGMA foreign_keys = ON;")
+	if err != nil {
+		return fmt.Errorf("Error while enable foreign_keys: %w", err)
+	}
 	defer db.Close()
 
 	if err := db.Ping(); err != nil {

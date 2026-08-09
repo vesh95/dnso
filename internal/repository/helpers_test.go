@@ -18,6 +18,9 @@ func upDatabase(t *testing.T) *sql.DB {
 	conn, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
 
+	_, err = conn.Exec("PRAGMA foreign_keys = ON;")
+	require.NoError(t, err)
+
 	err = conn.Ping()
 	require.NoError(t, err)
 

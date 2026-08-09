@@ -89,7 +89,6 @@ MIT — подробнее в файле [LICENSE](LICENSE).
 
 ---
 
-## Дополнительная документация
+## Dokcer
 
-- [Архитектура проекта](docs/architecture.md)
-- [REST API](docs/api.md)
+[Docker Hub](https://hub.docker.com/r/vesh95/dnso/)

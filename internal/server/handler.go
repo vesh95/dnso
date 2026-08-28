@@ -83,16 +83,16 @@ func (h *Handler) isLocalZone(name string) bool {
 
 // makeLocalRRs создаёт DNS Resource Records из локального хранилища записей.
 // Возвращает все записи, соответствующие домену и типу.
-func (h *Handler) makeLocalRRs(name string, qtype uint16) ([]dns.RR, error) {
+func (h *Handler) makeLocalRRs(fqdnName string, qtype uint16) ([]dns.RR, error) {
 	typeStr := dns.TypeToString[qtype]
 	if typeStr == "" {
 		return nil, fmt.Errorf("unsupported DNS type: %d", qtype)
 	}
 
 	if qtype == dns.TypeSOA {
-		zone, err := h.zoneStorage.Get(context.Background(), name)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get records: %w", err)
+		zone, ok := h.localZones[fqdnName]
+		if !ok {
+			return make([]dns.RR, 0), fmt.Errorf("no records found for %s type %s", fqdnName, typeStr)
 		}
 
 		soa := &dns.SOA{
@@ -116,17 +116,17 @@ func (h *Handler) makeLocalRRs(name string, qtype uint16) ([]dns.RR, error) {
 
 		return rrs, nil
 	} else {
-		records, err := h.recordStorage.Get(context.Background(), name, typeStr)
+		records, err := h.recordStorage.Get(context.Background(), fqdnName, typeStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get records: %w", err)
 		}
 		if len(records) == 0 {
-			return nil, fmt.Errorf("no records found for %s type %s", name, typeStr)
+			return nil, fmt.Errorf("no records found for %s type %s", fqdnName, typeStr)
 		}
 
 		rrs := make([]dns.RR, 0, len(records))
 		for _, rec := range records {
-			rrStr := fmt.Sprintf("%s %d %s %s", name, rec.TTL, typeStr, rec.Rdata)
+			rrStr := fmt.Sprintf("%s %d %s %s", fqdnName, rec.TTL, typeStr, rec.Rdata)
 			rr, err := dns.NewRR(rrStr)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse RR %q: %w", rrStr, err)
@@ -140,22 +140,22 @@ func (h *Handler) makeLocalRRs(name string, qtype uint16) ([]dns.RR, error) {
 
 // resolveLocal пытается разрешить имя через локальное хранилище.
 // Если найдена CNAME-запись, следует по цепочке (до maxCNAMEFollow).
-func (h *Handler) resolveLocal(name string, qtype uint16, depth int) ([]dns.RR, error) {
+func (h *Handler) resolveLocal(fqdnName string, qtype uint16, depth int) ([]dns.RR, error) {
 	const maxCNAMEFollow = 8
 	if depth > maxCNAMEFollow {
-		return nil, fmt.Errorf("CNAME loop detected for %s", name)
+		return nil, fmt.Errorf("CNAME loop detected for %s", fqdnName)
 	}
 
 	// Сначала ищем запись запрошенного типа
-	rrs, err := h.makeLocalRRs(name, qtype)
+	rrs, err := h.makeLocalRRs(fqdnName, qtype)
 	if err == nil {
 		return rrs, nil
 	}
 
 	// Если не нашли — ищем CNAME
-	cnameRRs, err := h.makeLocalRRs(name, dns.TypeCNAME)
+	cnameRRs, err := h.makeLocalRRs(fqdnName, dns.TypeCNAME)
 	if err != nil {
-		return nil, fmt.Errorf("no records found for %s", name)
+		return nil, fmt.Errorf("no records found for %s", fqdnName)
 	}
 
 	// Следуем по CNAME
@@ -173,7 +173,7 @@ func (h *Handler) resolveLocal(name string, qtype uint16, depth int) ([]dns.RR, 
 	}
 
 	if len(result) == 0 {
-		return nil, fmt.Errorf("no records found for %s", name)
+		return nil, fmt.Errorf("no records found for %s", fqdnName)
 	}
 
 	return result, nil

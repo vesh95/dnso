@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"html/template"
 	"io/fs"
-	"log"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -90,10 +89,10 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListZones(w http.ResponseWriter, r *http.Request) {
 	zones, err := s.zoneStorage.GetAll(r.Context())
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, zones)
+	s.writeJSON(w, http.StatusOK, zones)
 }
 
 func (s *Server) handleGetZone(w http.ResponseWriter, r *http.Request) {
@@ -104,10 +103,10 @@ func (s *Server) handleGetZone(w http.ResponseWriter, r *http.Request) {
 
 	zone, err := s.zoneStorage.Get(r.Context(), name)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "zone not found"})
+		s.writeJSON(w, http.StatusNotFound, map[string]string{"error": "zone not found"})
 		return
 	}
-	writeJSON(w, http.StatusOK, zone)
+	s.writeJSON(w, http.StatusOK, zone)
 }
 
 func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
@@ -119,12 +118,12 @@ func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
 		Expire  int64  `json:"expire"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
 		return
 	}
 	if req.TTL <= 0 {
@@ -137,11 +136,11 @@ func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
 
 	zone, err := s.zoneStorage.Add(r.Context(), req.Name, req.TTL, req.Refresh, req.Retry, req.Expire)
 	if err != nil {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+		s.writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		return
 	}
 	s.refreshZones()
-	writeJSON(w, http.StatusCreated, zone)
+	s.writeJSON(w, http.StatusCreated, zone)
 }
 
 func (s *Server) handleUpdateZone(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +156,7 @@ func (s *Server) handleUpdateZone(w http.ResponseWriter, r *http.Request) {
 		Expire  int64 `json:"expire"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
 	if req.TTL <= 0 {
@@ -166,10 +165,10 @@ func (s *Server) handleUpdateZone(w http.ResponseWriter, r *http.Request) {
 
 	zone, err := s.zoneStorage.Update(r.Context(), name, req.TTL, req.Refresh, req.Retry, req.Expire)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, zone)
+	s.writeJSON(w, http.StatusOK, zone)
 }
 
 func (s *Server) handleDeleteZone(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +179,7 @@ func (s *Server) handleDeleteZone(w http.ResponseWriter, r *http.Request) {
 
 	_, err := s.zoneStorage.Delete(r.Context(), name)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 	s.refreshZones()
@@ -197,16 +196,16 @@ func (s *Server) handleListRecords(w http.ResponseWriter, r *http.Request) {
 
 	zone, err := s.zoneStorage.Get(r.Context(), zoneName)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "zone not found"})
+		s.writeJSON(w, http.StatusNotFound, map[string]string{"error": "zone not found"})
 		return
 	}
 
 	rows, err := s.recordStorage.GetAllByZoneID(r.Context(), zone.Id)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, rows)
+	s.writeJSON(w, http.StatusOK, rows)
 }
 
 func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +216,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 
 	zone, err := s.zoneStorage.Get(r.Context(), zoneName)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "zone not found"})
+		s.writeJSON(w, http.StatusNotFound, map[string]string{"error": "zone not found"})
 		return
 	}
 
@@ -228,7 +227,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 		TTL    int64  `json:"ttl"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
 	req.Domain = strings.TrimSpace(req.Domain)
@@ -236,7 +235,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 	req.Rdata = strings.TrimSpace(req.Rdata)
 
 	if req.Domain == "" || req.Type == "" || req.Rdata == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "domain, type, and rdata are required"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "domain, type, and rdata are required"})
 		return
 	}
 	if req.TTL <= 0 {
@@ -245,17 +244,17 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 
 	record, err := s.recordStorage.Add(r.Context(), zone.Id, req.Domain, req.Type, req.Rdata, req.TTL)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusCreated, record)
+	s.writeJSON(w, http.StatusCreated, record)
 }
 
 func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid record id"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid record id"})
 		return
 	}
 
@@ -267,7 +266,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		TTL    int64  `json:"ttl"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 		return
 	}
 	req.Domain = strings.TrimSpace(req.Domain)
@@ -275,7 +274,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 	req.Rdata = strings.TrimSpace(req.Rdata)
 
 	if req.Domain == "" || req.Type == "" || req.Rdata == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "domain, type, and rdata are required"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "domain, type, and rdata are required"})
 		return
 	}
 	if req.TTL <= 0 {
@@ -284,23 +283,23 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 
 	record, err := s.recordStorage.Update(r.Context(), id, req.ZoneId, req.Domain, req.Type, req.Rdata, req.TTL)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, record)
+	s.writeJSON(w, http.StatusOK, record)
 }
 
 func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid record id"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid record id"})
 		return
 	}
 
 	_, err = s.recordStorage.Delete(r.Context(), id)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -308,10 +307,10 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 
 // --- Helpers ---
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
+func (s *Server) writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Printf("json encode error: %v", err)
+		s.logger.Error("json encode error", "error", err.Error())
 	}
 }

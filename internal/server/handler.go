@@ -29,7 +29,7 @@ type Handler struct {
 	logger        *slog.Logger
 
 	mu         sync.RWMutex
-	localZones map[string]struct{} // set of known local zone names (FQDN)
+	localZones map[string]repository.Zone
 }
 
 func NewHandler(config *HandlerConfig) *Handler {
@@ -38,7 +38,7 @@ func NewHandler(config *HandlerConfig) *Handler {
 		zoneStorage:   config.ZoneStorage,
 		recordStorage: config.RecordStorage,
 		cache:         config.Cache,
-		localZones:    make(map[string]struct{}),
+		localZones:    make(map[string]repository.Zone),
 		logger:        config.Logger,
 	}
 	h.RefreshZones()
@@ -55,9 +55,9 @@ func (h *Handler) RefreshZones() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.localZones = make(map[string]struct{}, len(zones))
+	h.localZones = make(map[string]repository.Zone, len(zones))
 	for _, z := range zones {
-		h.localZones[strings.ToLower(z.Name)] = struct{}{}
+		h.localZones[strings.ToLower(z.Name)] = *z
 	}
 }
 
@@ -104,7 +104,7 @@ func (h *Handler) makeLocalRRs(fqdnName string, qtype uint16) ([]dns.RR, error) 
 			},
 			Ns:      "ns." + zone.Name,
 			Mbox:    "admin." + zone.Name,
-			Serial:  uint32(zone.Serial),
+			Serial:  zone.Serial,
 			Refresh: uint32(zone.Refresh),
 			Retry:   uint32(zone.Retry),
 			Expire:  uint32(zone.Expire),

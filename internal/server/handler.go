@@ -14,19 +14,21 @@ import (
 )
 
 type HandlerConfig struct {
-	Client        *UpstreamExchanger
-	ZoneStorage   repository.ZoneRepository
-	RecordStorage repository.RecordRepository
-	Cache         *DNSCache
-	Logger        *slog.Logger
+	Client         *UpstreamExchanger
+	ZoneStorage    repository.ZoneRepository
+	RecordStorage  repository.RecordRepository
+	Cache          *DNSCache
+	Logger         *slog.Logger
+	HandlerMetrics HandlerMetrics
 }
 
 type Handler struct {
-	client        *UpstreamExchanger
-	zoneStorage   repository.ZoneRepository
-	recordStorage repository.RecordRepository
-	cache         *DNSCache
-	logger        *slog.Logger
+	client         *UpstreamExchanger
+	zoneStorage    repository.ZoneRepository
+	recordStorage  repository.RecordRepository
+	cache          *DNSCache
+	logger         *slog.Logger
+	handlerMetrics HandlerMetrics
 
 	mu         sync.RWMutex
 	localZones map[string]repository.Zone
@@ -34,12 +36,13 @@ type Handler struct {
 
 func NewHandler(config *HandlerConfig) *Handler {
 	h := &Handler{
-		client:        config.Client,
-		zoneStorage:   config.ZoneStorage,
-		recordStorage: config.RecordStorage,
-		cache:         config.Cache,
-		localZones:    make(map[string]repository.Zone),
-		logger:        config.Logger,
+		client:         config.Client,
+		zoneStorage:    config.ZoneStorage,
+		recordStorage:  config.RecordStorage,
+		cache:          config.Cache,
+		localZones:     make(map[string]repository.Zone),
+		logger:         config.Logger,
+		handlerMetrics: config.HandlerMetrics,
 	}
 	h.RefreshZones()
 	return h
@@ -59,6 +62,7 @@ func (h *Handler) RefreshZones() {
 	for _, z := range zones {
 		h.localZones[strings.ToLower(z.Name)] = *z
 	}
+	h.handlerMetrics.DnsCachedZonesCount(len(h.localZones))
 }
 
 // isLocalZone проверяет, существует ли зона для указанного домена (FQDN).
@@ -185,6 +189,12 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		slog.Any("remote_addr", w.RemoteAddr().String()),
 	)
 
+	h.handlerMetrics.DnsIncRequestsTotal()
+	start := time.Now()
+	defer func() {
+		h.handlerMetrics.DnsRequestDuration(time.Since(start).Seconds())
+	}()
+
 	ctx := context.Background()
 	ctx, handlerCtxCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer handlerCtxCancel()
@@ -243,7 +253,10 @@ func (h *Handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	// 3. Отправляем upstream-запрос для нелокальных вопросов
 	if len(proxyQuestions) > 0 {
+		h.handlerMetrics.DnsIncUpstreamsTotal()
+
 		h.logger.InfoContext(ctx, "forwarding to upstream", "question_count", len(proxyQuestions), "id", r.Id)
+
 		req := new(dns.Msg)
 		req.Id = r.Id
 		req.Question = proxyQuestions

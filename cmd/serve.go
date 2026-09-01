@@ -114,13 +114,15 @@ func runServer() error {
 	webAddr := envOrDefault("DNSO_WEB_ADDR", ":8080")
 	logLevel := logLevelFromString(envOrDefault("LOG_LEVEL", "info"))
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
-
 	fmt.Println("Apply migrations")
 	err = runMigrateUp()
 	if err != nil {
 		return fmt.Errorf("Failed to apply migrations: %w", err)
 	}
+
+	metricsRegistry := metrics.NewRegistry()
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 
 	// Открываем БД
 	db, err := sql.Open("sqlite3", dbPath)
@@ -144,7 +146,7 @@ func runServer() error {
 	// Создаём кэш
 	var cache *server.DNSCache
 	if enableCache {
-		cache = server.NewDNSCache()
+		cache = server.NewDNSCache(metricsRegistry)
 	}
 
 	// Создаём DNS-клиент для upstream
@@ -169,7 +171,7 @@ func runServer() error {
 	}
 
 	// Создаём веб-сервер
-	webServer := web.NewServer(db, logger.With("handler_type", "web"), handler.RefreshZones)
+	webServer := web.NewServer(db, logger.With("handler_type", "web"), handler.RefreshZones, metricsRegistry)
 	httpServer := &http.Server{
 		Addr:    webAddr,
 		Handler: webServer,
@@ -206,6 +208,9 @@ func runServer() error {
 	if err := httpServer.Close(); err != nil {
 		return fmt.Errorf("web server shutdown error: %w", err)
 	}
+
+	log.Println("Shutdown cache background processes...")
+	cache.Shutdown()
 
 	log.Println("Server stopped gracefully")
 	return nil

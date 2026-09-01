@@ -24,6 +24,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type metricsStub struct {
+}
+
+func (m *metricsStub) WebAddRequestDuration(seconds float64) {}
+func (m *metricsStub) WebIncRequestsTotal()                  {}
+
 func upDatabase(t *testing.T) *sql.DB {
 	conn, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
@@ -50,7 +56,7 @@ func upDatabase(t *testing.T) *sql.DB {
 func setupTest(t *testing.T) (*Server, *sql.DB, func() int) {
 	updateZones := 0
 	db := upDatabase(t)
-	s := NewServer(db, slog.New(slog.NewTextHandler(io.Discard, nil)), func() { updateZones++ })
+	s := NewServer(db, slog.New(slog.NewTextHandler(io.Discard, nil)), func() { updateZones++ }, &metricsStub{})
 	return s, db, func() int { return updateZones }
 }
 

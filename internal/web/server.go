@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"dnso/internal/repository"
 )
@@ -26,15 +27,17 @@ type Server struct {
 	mux           *http.ServeMux
 	tmpl          *template.Template
 	logger        *slog.Logger
+	metrics       WebServerMetrics
 	refreshZones  func()
 }
 
-func NewServer(db *sql.DB, logger *slog.Logger, refeshZones func()) *Server {
+func NewServer(db *sql.DB, logger *slog.Logger, refeshZones func(), metrics WebServerMetrics) *Server {
 	s := &Server{
 		zoneStorage:   repository.NewZoneStorage(db),
 		recordStorage: repository.NewRecordStorage(db),
 		mux:           http.NewServeMux(),
 		logger:        logger,
+		metrics:       metrics,
 		refreshZones:  refeshZones,
 	}
 
@@ -72,6 +75,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	defer s.reqDuration(time.Now())
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
@@ -87,6 +91,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 // --- Zones ---
 
 func (s *Server) handleListZones(w http.ResponseWriter, r *http.Request) {
+	defer s.reqDuration(time.Now())
 	zones, err := s.zoneStorage.GetAll(r.Context())
 	if err != nil {
 		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -96,6 +101,7 @@ func (s *Server) handleListZones(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetZone(w http.ResponseWriter, r *http.Request) {
+	defer s.reqDuration(time.Now())
 	name := r.PathValue("name")
 	if !strings.HasSuffix(name, ".") {
 		name += "."
@@ -110,6 +116,7 @@ func (s *Server) handleGetZone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
+	defer s.reqDuration(time.Now())
 	var req struct {
 		Name    string `json:"name"`
 		TTL     int64  `json:"ttl"`
@@ -144,6 +151,7 @@ func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateZone(w http.ResponseWriter, r *http.Request) {
+	defer s.reqDuration(time.Now())
 	name := r.PathValue("name")
 	if !strings.HasSuffix(name, ".") {
 		name += "."
@@ -172,6 +180,7 @@ func (s *Server) handleUpdateZone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteZone(w http.ResponseWriter, r *http.Request) {
+	defer s.reqDuration(time.Now())
 	name := r.PathValue("name")
 	if !strings.HasSuffix(name, ".") {
 		name += "."
@@ -189,6 +198,7 @@ func (s *Server) handleDeleteZone(w http.ResponseWriter, r *http.Request) {
 // --- Records ---
 
 func (s *Server) handleListRecords(w http.ResponseWriter, r *http.Request) {
+	defer s.reqDuration(time.Now())
 	zoneName := r.PathValue("name")
 	if !strings.HasSuffix(zoneName, ".") {
 		zoneName += "."
@@ -209,6 +219,7 @@ func (s *Server) handleListRecords(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
+	defer s.reqDuration(time.Now())
 	zoneName := r.PathValue("name")
 	if !strings.HasSuffix(zoneName, ".") {
 		zoneName += "."
@@ -251,6 +262,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
+	defer s.reqDuration(time.Now())
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
@@ -290,6 +302,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
+	defer s.reqDuration(time.Now())
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
@@ -313,4 +326,8 @@ func (s *Server) writeJSON(w http.ResponseWriter, status int, v any) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		s.logger.Error("json encode error", "error", err.Error())
 	}
+}
+
+func (s *Server) reqDuration(start time.Time) {
+	s.metrics.WebAddRequestDuration(float64(time.Since(start)))
 }

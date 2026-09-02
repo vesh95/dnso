@@ -75,6 +75,7 @@ func (c *DNSCache) Get(name string, qtype uint16) (*dns.Msg, bool) {
 	return entry.msg, true
 }
 
+// Put производит вставку значения в кэш или заменяет значение в существующей записи
 func (c *DNSCache) Put(name string, qtype uint16, msg *dns.Msg, ttl uint32) {
 	defer c.metrics.DnsCacheIncSets()
 	if ttl == 0 {

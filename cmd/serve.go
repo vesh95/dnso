@@ -4,17 +4,16 @@ Copyright © 2026 Eduard Larionov <vesh95.17@ya.ru>
 package cmd
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
-	"net/netip"
 	"os"
 	"os/signal"
-	"slices"
 	"syscall"
 
+	"dnso/internal/config"
+	"dnso/internal/metrics"
 	"dnso/internal/repository"
 	"dnso/internal/server"
 	"dnso/internal/web"
@@ -42,79 +41,15 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 }
 
-func envOrDefault(key, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return defaultVal
-}
-
-func logLevelFromString(level string) slog.Level {
-	switch strings.ToLower(level) {
-	case "debug":
-		return slog.LevelDebug
-	case "info":
-		return slog.LevelInfo
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
-	}
-}
-
-// parseUpstreams принимает строку с адресами upstream-серверов, разделёнными запятыми,
-// и возвращает слайс строк с корректными адресами и портами по умолчанию, если не указаны.
-func parseUpstreams(adresses string) ([]string, error) {
-	result := []string{}
-	rawAddrs := strings.Split(adresses, ",")
-	if len(rawAddrs) == 0 {
-		return []string{}, nil
-	}
-
-	for _, v := range rawAddrs {
-		v = strings.TrimSpace(v)
-
-		if len(v) == 0 {
-			continue
-		}
-
-		addr, err := netip.ParseAddrPort(v)
-		var addrString string
-		if err != nil {
-			parseAddr, err := netip.ParseAddr(v)
-			if err != nil {
-				return []string{}, fmt.Errorf("Invalid upstream address: %s, skipping. Error: %v", v, err)
-			} else {
-				addrString = netip.AddrPortFrom(parseAddr, 53).String()
-			}
-		} else {
-			addrString = addr.String()
-		}
-
-		if slices.Contains(result, addrString) {
-			continue
-		}
-
-		result = append(result, addrString)
-	}
-
-	return result, nil
-}
-
 func runServer() error {
-	dbPath := envOrDefault("DNSO_DB_PATH", "./dnso.db")
-	bindAddr := envOrDefault("DNSO_BIND_ADDR", ":53")
-	upstreams, err := parseUpstreams(envOrDefault("DNSO_UPSTREAMS", "8.8.8.8:53"))
+	config, err := config.ParseEnv()
 	if err != nil {
-		log.Fatalf("failed to parse upstreams: %s", err)
+		return fmt.Errorf("Error while read config: %s", err.Error())
 	}
-	enableCache := envOrDefault("DNSO_CACHE", "true") == "true"
-	webAddr := envOrDefault("DNSO_WEB_ADDR", ":8080")
-	logLevel := logLevelFromString(envOrDefault("LOG_LEVEL", "info"))
 
-	fmt.Println("Apply migrations")
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: config.LogLevel}))
+
+	logger.Info("Apply migrations")
 	err = runMigrateUp()
 	if err != nil {
 		return fmt.Errorf("Failed to apply migrations: %w", err)
@@ -122,37 +57,16 @@ func runServer() error {
 
 	metricsRegistry := metrics.NewRegistry()
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
-
-	// Открываем БД
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := openDB(config.DatabasePath)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	_, err = db.Exec("PRAGMA foreign_keys = ON;")
-	if err != nil {
-		return fmt.Errorf("Error while enable foreign_keys: %w", err)
+		return fmt.Errorf("error while database connct: %s", err.Error())
 	}
 	defer db.Close()
 
-	if err := db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	// Создаём репозитории
 	zoneStorage := repository.NewZoneStorage(db)
 	recordStorage := repository.NewRecordStorage(db)
-
-	// Создаём кэш
-	var cache *server.DNSCache
-	if enableCache {
-		cache = server.NewDNSCache(metricsRegistry)
-	}
-
-	// Создаём DNS-клиент для upstream
-	dnsClient := server.NewExchanger(upstreams, logger.With("handler_type", "upstream client"))
-
-	// Создаём хендлер
+	cache := server.NewDNSCache(metricsRegistry)
+	dnsClient := server.NewExchanger(config.Dns.UpstreamAddrs, logger.With("handler_type", "upstream client"))
 	handler := server.NewHandler(&server.HandlerConfig{
 		Client:        dnsClient,
 		ZoneStorage:   zoneStorage,
@@ -161,57 +75,68 @@ func runServer() error {
 		Logger:        logger.With("handler_type", "dns"),
 	})
 
-	// Регистрируем хендлер для всех доменов
 	dns.HandleFunc(".", handler.ServeDNS)
 
-	// Запускаем DNS-сервер
 	srv := &dns.Server{
-		Addr: bindAddr,
+		Addr: config.Dns.BindAddr,
 		Net:  "udp",
 	}
 
-	// Создаём веб-сервер
 	webServer := web.NewServer(db, logger.With("handler_type", "web"), handler.RefreshZones, metricsRegistry)
 	httpServer := &http.Server{
-		Addr:    webAddr,
+		Addr:    config.Web.BindAddr,
 		Handler: webServer,
+	}
+
+	metricsServer := &http.Server{
+		Addr:    config.Metrics.BindAddr,
+		Handler: metricsRegistry,
 	}
 
 	// Канал для graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
+	go func() {
+		logger.Info("Prometheus metrics registry starts", "address", config.Metrics.BindAddr)
+		if err := metricsServer.ListenAndServe(); err != nil {
+			logger.Error("Error while start prometheus handler", "error", err.Error())
+		}
+	}()
+
 	// Запускаем DNS-сервер
 	go func() {
-		log.Printf("DNS server listening on %s (upstream: %s)", bindAddr, strings.Join(upstreams, ", "))
+		log.Printf("DNS server listening on %s (upstream: %s)", config.Dns.BindAddr, strings.Join(config.Dns.UpstreamAddrs, ", "))
 		if err := srv.ListenAndServe(); err != nil {
-			log.Fatalf("Failed to start DNS server: %v", err)
+			logger.Error("Failed to start DNS server", "error", err.Error())
 		}
 	}()
 
 	// Запускаем веб-сервер
 	go func() {
-		log.Printf("Web interface listening on %s", webAddr)
+		log.Printf("Web interface listening on %s", config.Web.BindAddr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start web server: %v", err)
+			logger.Error("Failed to start web server", "error", err.Error())
 		}
 	}()
 
-	// Ждём сигнал
 	sig := <-quit
 	log.Printf("Received signal %v, shutting down...", sig)
 
-	// Graceful shutdown
 	if err := srv.Shutdown(); err != nil {
-		return fmt.Errorf("DNS server shutdown error: %w", err)
+		logger.Error("DNS server shutdown", "error", err)
 	}
 	if err := httpServer.Close(); err != nil {
-		return fmt.Errorf("web server shutdown error: %w", err)
+		logger.Error("web server shutdown", "error", err)
 	}
 
-	log.Println("Shutdown cache background processes...")
+	if err := metricsServer.Close(); err != nil {
+		logger.Error("metrics server shutdown", "error", err)
+	}
+
+	logger.Info("Shutdown cache background processes...")
 	cache.Shutdown()
 
-	log.Println("Server stopped gracefully")
+	logger.Info("Server stopped gracefully")
 	return nil
 }

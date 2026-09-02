@@ -1,12 +1,15 @@
 package metrics
 
 import (
+	"net/http"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Registry struct {
-	registry *prometheus.Registry
+	Registry *prometheus.Registry
 	metrics  *metrics
 }
 
@@ -86,9 +89,16 @@ func NewRegistry() *Registry {
 	)
 
 	return &Registry{
-		registry: reg,
+		Registry: reg,
 		metrics:  m,
 	}
+}
+
+func (reg *Registry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m := http.NewServeMux()
+	m.Handle("/metrics", promhttp.HandlerFor(reg.Registry, promhttp.HandlerOpts{}))
+
+	m.ServeHTTP(w, r)
 }
 
 // WebAddRequestDuration implements [web.WebServerMetrics].

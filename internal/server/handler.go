@@ -22,6 +22,7 @@ type HandlerConfig struct {
 	HandlerMetrics HandlerMetrics
 }
 
+// Обработчик DNS запросов
 type Handler struct {
 	client         *UpstreamExchanger
 	zoneStorage    repository.ZoneRepository
@@ -34,6 +35,9 @@ type Handler struct {
 	localZones map[string]repository.Zone
 }
 
+// NewHandler создает обработчик DNS запросов
+//
+// При запуске поднимает зоны из базы данных и сохраняет их в localZones
 func NewHandler(config *HandlerConfig) *Handler {
 	h := &Handler{
 		client:         config.Client,

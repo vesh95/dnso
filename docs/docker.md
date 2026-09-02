@@ -25,6 +25,7 @@ docker run -d \
 | `DNSO_UPSTREAM`  | `8.8.8.8:53`  | Upstream DNS-резолвер           |
 | `DNSO_CACHE`     | `true`        | Включение кэширования (`true`/`false`) |
 | `DNSO_WEB_ADDR`  | `:8080`       | Адрес для веб-интерфейса        |
+| `DNSO_METRICS_ADDR`| `:3010`     | Адрес метрик prometheus         |
 
 ### Порты
 

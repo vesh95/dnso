@@ -1,0 +1,6 @@
+scrape_configs:
+- job_name: dnso
+  scrape_interval: 1s
+  static_configs:
+  - targets:
+    - dnso:3010

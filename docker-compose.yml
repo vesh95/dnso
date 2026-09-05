@@ -19,5 +19,16 @@ services:
     volumes:
       - dnso-data:/data
 
+  prometheus:
+    image: prom/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - dnso
+
 volumes:
   dnso-data:

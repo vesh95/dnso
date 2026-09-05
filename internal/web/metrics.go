@@ -2,5 +2,5 @@ package web
 
 type WebServerMetrics interface {
 	WebIncRequestsTotal()
-	WebAddRequestDuration(seconds float64)
+	WebAddRequestDuration(method, path string, seconds float64)
 }

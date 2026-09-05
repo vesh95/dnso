@@ -45,16 +45,16 @@ func NewServer(db *sql.DB, logger *slog.Logger, refeshZones func(), metrics WebS
 	s.tmpl = template.Must(template.ParseFS(templateFS, "templates/*.html"))
 
 	// API routes
-	s.mux.HandleFunc("GET /api/zones", s.handleListZones)
-	s.mux.HandleFunc("GET /api/zones/{name}", s.handleGetZone)
-	s.mux.HandleFunc("POST /api/zones", s.handleCreateZone)
-	s.mux.HandleFunc("PUT /api/zones/{name}", s.handleUpdateZone)
-	s.mux.HandleFunc("DELETE /api/zones/{name}", s.handleDeleteZone)
+	s.mux.HandleFunc("GET /api/zones", s.durationMiddleware(s.handleListZones))
+	s.mux.HandleFunc("GET /api/zones/{name}", s.durationMiddleware(s.handleGetZone))
+	s.mux.HandleFunc("POST /api/zones", s.durationMiddleware(s.handleCreateZone))
+	s.mux.HandleFunc("PUT /api/zones/{name}", s.durationMiddleware(s.handleUpdateZone))
+	s.mux.HandleFunc("DELETE /api/zones/{name}", s.durationMiddleware(s.handleDeleteZone))
 
-	s.mux.HandleFunc("GET /api/zones/{name}/records", s.handleListRecords)
-	s.mux.HandleFunc("POST /api/zones/{name}/records", s.handleCreateRecord)
-	s.mux.HandleFunc("PUT /api/records/{id}", s.handleUpdateRecord)
-	s.mux.HandleFunc("DELETE /api/records/{id}", s.handleDeleteRecord)
+	s.mux.HandleFunc("GET /api/zones/{name}/records", s.durationMiddleware(s.handleListRecords))
+	s.mux.HandleFunc("POST /api/zones/{name}/records", s.durationMiddleware(s.handleCreateRecord))
+	s.mux.HandleFunc("PUT /api/records/{id}", s.durationMiddleware(s.handleUpdateRecord))
+	s.mux.HandleFunc("DELETE /api/records/{id}", s.durationMiddleware(s.handleDeleteRecord))
 
 	// Static files
 	staticSub, err := fs.Sub(staticFS, "static")
@@ -65,7 +65,7 @@ func NewServer(db *sql.DB, logger *slog.Logger, refeshZones func(), metrics WebS
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 
 	// SPA — все остальные пути отдаём index.html
-	s.mux.HandleFunc("GET /", s.handleIndex)
+	s.mux.HandleFunc("GET /", s.durationMiddleware(s.handleIndex))
 
 	return s
 }
@@ -74,8 +74,20 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
+func (s *Server) durationMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Вызываем оригинальный хендлер
+		next(w, r)
+
+		duration := time.Since(start).Seconds()
+		s.metrics.WebAddRequestDuration(r.Method, r.URL.Path, duration) // Замер скорости
+		s.metrics.WebIncRequestsTotal() // 1+ количество запросов (можно посчитать через requset_duration и в дальнейшем не потребуется)
+	}
+}
+
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	defer s.reqDuration(time.Now())
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
@@ -91,7 +103,6 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 // --- Zones ---
 
 func (s *Server) handleListZones(w http.ResponseWriter, r *http.Request) {
-	defer s.reqDuration(time.Now())
 	zones, err := s.zoneStorage.GetAll(r.Context())
 	if err != nil {
 		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -101,7 +112,6 @@ func (s *Server) handleListZones(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetZone(w http.ResponseWriter, r *http.Request) {
-	defer s.reqDuration(time.Now())
 	name := r.PathValue("name")
 	if !strings.HasSuffix(name, ".") {
 		name += "."
@@ -116,7 +126,6 @@ func (s *Server) handleGetZone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
-	defer s.reqDuration(time.Now())
 	var req struct {
 		Name    string `json:"name"`
 		TTL     int64  `json:"ttl"`
@@ -151,7 +160,6 @@ func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateZone(w http.ResponseWriter, r *http.Request) {
-	defer s.reqDuration(time.Now())
 	name := r.PathValue("name")
 	if !strings.HasSuffix(name, ".") {
 		name += "."
@@ -180,7 +188,6 @@ func (s *Server) handleUpdateZone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteZone(w http.ResponseWriter, r *http.Request) {
-	defer s.reqDuration(time.Now())
 	name := r.PathValue("name")
 	if !strings.HasSuffix(name, ".") {
 		name += "."
@@ -198,7 +205,6 @@ func (s *Server) handleDeleteZone(w http.ResponseWriter, r *http.Request) {
 // --- Records ---
 
 func (s *Server) handleListRecords(w http.ResponseWriter, r *http.Request) {
-	defer s.reqDuration(time.Now())
 	zoneName := r.PathValue("name")
 	if !strings.HasSuffix(zoneName, ".") {
 		zoneName += "."
@@ -219,7 +225,6 @@ func (s *Server) handleListRecords(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
-	defer s.reqDuration(time.Now())
 	zoneName := r.PathValue("name")
 	if !strings.HasSuffix(zoneName, ".") {
 		zoneName += "."
@@ -262,7 +267,6 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
-	defer s.reqDuration(time.Now())
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
@@ -302,7 +306,6 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
-	defer s.reqDuration(time.Now())
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
@@ -326,8 +329,4 @@ func (s *Server) writeJSON(w http.ResponseWriter, status int, v any) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		s.logger.Error("json encode error", "error", err.Error())
 	}
-}
-
-func (s *Server) reqDuration(start time.Time) {
-	s.metrics.WebAddRequestDuration(float64(time.Since(start)))
 }

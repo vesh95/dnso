@@ -14,7 +14,7 @@ type Registry struct {
 }
 
 type metrics struct {
-	webRequestDuration  prometheus.Histogram
+	webRequestDuration  prometheus.HistogramVec
 	webRequestsTotal    prometheus.Counter
 	dnsRequestTotal     prometheus.Counter
 	dnsCachedZonesCount prometheus.Gauge
@@ -30,14 +30,18 @@ type metrics struct {
 func NewRegistry() *Registry {
 	reg := prometheus.NewRegistry()
 	m := &metrics{
-		webRequestDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+		webRequestDuration: *prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "dnso_web_request_duration",
 			Help:    "Длительности запросов REST API",
 			Buckets: prometheus.DefBuckets,
-		}),
+		}, []string{"method", "path"}),
 		webRequestsTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "dnso_web_requests_count",
 			Help: "Количество запросов REST API",
+		}),
+		dnsRequestTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "dnso_dns_requests_count",
+			Help: "Количество запросов к DNS серверу",
 		}),
 		dnsCachedZonesCount: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "dnso_dns_cached_zonesCount",
@@ -102,8 +106,8 @@ func (reg *Registry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // WebAddRequestDuration implements [web.WebServerMetrics].
-func (r *Registry) WebAddRequestDuration(seconds float64) {
-	r.metrics.webRequestDuration.Observe(seconds)
+func (r *Registry) WebAddRequestDuration(method, path string, seconds float64) {
+	r.metrics.webRequestDuration.WithLabelValues(method, path).Observe(seconds)
 }
 
 // WebIncRequestsTotal implements [web.WebServerMetrics].

@@ -27,8 +27,8 @@ import (
 type metricsStub struct {
 }
 
-func (m *metricsStub) WebAddRequestDuration(seconds float64) {}
-func (m *metricsStub) WebIncRequestsTotal()                  {}
+func (m *metricsStub) WebAddRequestDuration(method, path string, seconds float64) {}
+func (m *metricsStub) WebIncRequestsTotal()                                       {}
 
 func upDatabase(t *testing.T) *sql.DB {
 	conn, err := sql.Open("sqlite3", ":memory:")

@@ -73,6 +73,7 @@ func runServer() error {
 		RecordStorage: recordStorage,
 		Cache:         cache,
 		Logger:        logger.With("handler_type", "dns"),
+		HandlerMetrics: metricsRegistry,
 	})
 
 	dns.HandleFunc(".", handler.ServeDNS)
